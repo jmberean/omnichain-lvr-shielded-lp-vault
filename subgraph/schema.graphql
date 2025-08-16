@@ -1,30 +1,33 @@
-type LiquidityAction @entity(immutable: true) {
+type Signal @entity {
   id: ID!
-  poolId: Bytes!
-  mode: Int!
-  epoch: BigInt!
-  baseDelta: BigInt!
-  quoteDelta: BigInt!
-  reason: String!
+  token: Bytes!
+  amount: BigInt!
+  price: BigDecimal!
+  timestamp: BigInt!
+  lvr: BigDecimal!
+  hookAddress: Bytes!
+}
+
+type ModeChange @entity {
+  id: ID!
+  pool: Bytes!
+  oldMode: String!
+  newMode: String!
+  timestamp: BigInt!
+  lvrThreshold: BigDecimal!
   txHash: Bytes!
   blockNumber: BigInt!
 }
 
-type ModeApplied @entity(immutable: true) {
+type LiquidityAction @entity {
   id: ID!
-  poolId: Bytes!
-  mode: Int!
-  epoch: BigInt!
-  reason: String!
-  txHash: Bytes!
-  blockNumber: BigInt!
-}
-
-type Signal @entity(immutable: true) {
-  id: ID!
-  poolId: Bytes!
-  priceE18: BigInt!
-  updatedAt: BigInt!
+  type: String!
+  pool: Bytes!
+  amount0: BigInt!
+  amount1: BigInt!
+  tickLower: BigInt!
+  tickUpper: BigInt!
+  lvrAdjustment: BigDecimal!
   txHash: Bytes!
   blockNumber: BigInt!
 }

@@ -1,62 +1,64 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.26;
 
-import {IVault} from "./interfaces/IVault.sol";
+contract Vault {
+    enum Mode { NORMAL, WIDENED, RISK_OFF }
 
-contract Vault is IVault {
-    bytes32 private _poolId;
-    Mode    private _mode;
-    uint64  private _epoch;
+    address public admin;
+    address public lvrHook;
 
-    address private _admin;
-    address private _hook;
-    address private _keeper;
+    Mode   private _mode;
+    uint64 public lastEpoch;
+
+    event HookSet(address hook);
+
+    // Matches the subgraph handler signature: ModeApplied(indexed bytes32,string,uint256)
+    event ModeApplied(bytes32 indexed poolId, string newMode, uint256 lvr);
 
     modifier onlyAdmin() {
-        require(msg.sender == _admin, "NOT_ADMIN");
+        require(msg.sender == admin, "NOT_ADMIN");
         _;
     }
 
-    constructor(bytes32 poolId_) {
-        _poolId = poolId_;
-        _mode = Mode.NORMAL;
-        _epoch = 0;
-        _admin = msg.sender;
-        emit AdminChanged(_admin);
+    modifier onlyHookOrAdmin() {
+        require(msg.sender == lvrHook || msg.sender == admin, "NOT_AUTH");
+        _;
     }
 
-    function poolId() external view returns (bytes32) { return _poolId; }
-    function currentMode() external view returns (Mode) { return _mode; }
-    function modeEpoch() external view returns (uint64) { return _epoch; }
-
-    function admin() external view returns (address) { return _admin; }
-    function hook() external view returns (address) { return _hook; }
-    function keeper() external view returns (address) { return _keeper; }
-
-    function setAdmin(address admin_) external onlyAdmin {
-        _admin = admin_;
-        emit AdminChanged(admin_);
+    constructor() {
+        admin = msg.sender;
+        _mode = Mode.NORMAL;
     }
 
     function setHook(address hook_) external onlyAdmin {
-        _hook = hook_;
-        emit HookChanged(hook_);
+        lvrHook = hook_;
+        emit HookSet(hook_);
     }
 
-    function setKeeper(address keeper_) external onlyAdmin {
-        _keeper = keeper_;
-        emit KeeperChanged(keeper_);
+    function setAdmin(address newAdmin) external onlyAdmin {
+        admin = newAdmin;
     }
 
-    function applyMode(Mode mode, uint64 epoch, string calldata reason) external {
-        require(msg.sender == _hook, "NOT_HOOK");
-        _mode = mode;
-        _epoch = epoch;
-        emit ModeApplied(_poolId, uint8(mode), epoch, reason);
+    function currentMode() external view returns (Mode) {
+        return _mode;
     }
 
-    function keeperRebalance(int256 baseDelta, int256 quoteDelta, string calldata reason) external {
-        require(msg.sender == _keeper, "NOT_KEEPER");
-        emit LiquidityAction(_poolId, uint8(_mode), _epoch, baseDelta, quoteDelta, reason);
+    /// @notice Simple entrypoint your hook (or admin) can call to apply a mode.
+    /// @param poolId If you don’t track pools yet, you can pass bytes32(0).
+    /// @param mode_  New mode to apply.
+    /// @param epoch  Optional epoch tag for demos/keepers.
+    /// @param lvrE18 Optional LVR metric (1e18). Set 0 if not used.
+    function applyMode(bytes32 poolId, Mode mode_, uint64 epoch, uint256 lvrE18)
+        external
+        onlyHookOrAdmin
+    {
+        _mode = mode_;
+        lastEpoch = epoch;
+
+        string memory label =
+            mode_ == Mode.NORMAL  ? "NORMAL"  :
+            mode_ == Mode.WIDENED ? "WIDENED" : "RISK_OFF";
+
+        emit ModeApplied(poolId, label, lvrE18);
     }
 }

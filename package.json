@@ -2,13 +2,13 @@
   "name": "omnichain-lvr-shield",
   "private": true,
   "version": "0.0.0",
-"scripts": {
-  "graph:codegen": "graph codegen subgraph/subgraph.yaml --output-dir subgraph/generated",
-  "graph:build": "graph build subgraph/subgraph.yaml",
-  "graph:create:local": "graph create --node http://127.0.0.1:8020 lvr/local || true",
-  "graph:deploy:local": "graph deploy --node http://127.0.0.1:8020 --ipfs http://127.0.0.1:5001 lvr/local subgraph/subgraph.yaml"
-}
-,
+  "scripts": {
+    "graph:codegen": "graph codegen subgraph/subgraph.yaml --output-dir subgraph/generated",
+    "graph:build":   "graph build subgraph/subgraph.yaml",
+    "graph:create:local": "graph create --node http://127.0.0.1:8020 lvr/local || true",
+    "graph:deploy:local": "graph deploy --node http://127.0.0.1:8020 --ipfs http://127.0.0.1:5001 lvr/local subgraph/subgraph.yaml",
+    "graph:deploy:uni-sepolia": "graph deploy --node http://127.0.0.1:8020 --ipfs http://127.0.0.1:5001 lvr/unichain-sepolia subgraph/subgraph.yaml"
+  },
   "devDependencies": {
     "@graphprotocol/graph-cli": "0.97.1",
     "assemblyscript": "0.27.23"
