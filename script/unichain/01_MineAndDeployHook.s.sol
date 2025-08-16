@@ -1,33 +1,45 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.26;
 
-import {Script, console2} from "forge-std/Script.sol";
+import "forge-std/Script.sol";
+
+import {IPoolManager} from "v4-core/src/interfaces/IPoolManager.sol";
+import {Hooks} from "v4-core/src/libraries/Hooks.sol";
+import {HookMiner} from "v4-periphery/src/utils/HookMiner.sol";
+
+import {Vault} from "../../contracts/Vault.sol";
 import {IVault} from "../../contracts/interfaces/IVault.sol";
 import {LVRShieldHook} from "../../contracts/hooks/v4/LVRShieldHook.sol";
-import {IPoolManager} from "v4-core/src/interfaces/IPoolManager.sol";
+import {HookCreate2Factory} from "../../contracts/utils/HookCreate2Factory.sol";
 
 contract MineAndDeployHook is Script {
-    // TODO: fill with real PoolManager on Unichain Sepolia
-    address constant UNICHAIN_SEPOLIA_POOL_MANAGER = address(0);
+    // ✅ checksummed address (update if needed)
+    address constant POOL_MANAGER_UNICHAIN_SEPOLIA = 0x00B036B58a818B1BC34d502D3fE730Db729e62AC;
 
     function run() external {
-        require(UNICHAIN_SEPOLIA_POOL_MANAGER != address(0), "SET_POOL_MANAGER");
-
         uint256 pk = vm.envUint("PRIVATE_KEY");
-        address deployer = vm.addr(pk);
-        address vaultAddr = vm.envAddress("VAULT_ADDRESS");
-        require(vaultAddr != address(0), "SET_VAULT_ADDRESS");
+        address deployer = vm.addr(pk); // ✅ use EOA explicitly
 
         vm.startBroadcast(pk);
 
-        // 3-arg ctor: (manager, vault, admin)
-        LVRShieldHook hook = new LVRShieldHook(
-            IPoolManager(UNICHAIN_SEPOLIA_POOL_MANAGER),
-            IVault(vaultAddr),
-            deployer
-        );
+        Vault vault = new Vault(deployer);
+        HookCreate2Factory factory = new HookCreate2Factory();
+
+        bytes memory ctorArgs = abi.encode(IPoolManager(POOL_MANAGER_UNICHAIN_SEPOLIA), IVault(address(vault)), deployer);
+        uint160 flags = uint160(Hooks.BEFORE_SWAP_FLAG | Hooks.AFTER_SWAP_FLAG);
+
+        (address predicted, bytes32 salt) =
+            HookMiner.find(address(factory), flags, type(LVRShieldHook).creationCode, ctorArgs);
+
+        address hookAddr = factory.deploy(salt, abi.encodePacked(type(LVRShieldHook).creationCode, ctorArgs));
+        require(hookAddr == predicted, "mined address mismatch");
+
+        vault.setHook(hookAddr);
+
+        console2.log("Vault  :", address(vault));
+        console2.log("Hook   :", hookAddr);
+        console2.logBytes32(salt);
 
         vm.stopBroadcast();
-        console2.log("Hook deployed:", address(hook));
     }
 }

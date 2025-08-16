@@ -1,26 +1,16 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.26;
 
-/// @notice Minimal CREATE2 factory for deploying the Hook at a permission-encoded address.
+/// @notice Minimal CREATE2 factory for deterministic deployments.
 contract HookCreate2Factory {
-    event Deployed(address addr, bytes32 salt);
+    event Deployed(address indexed addr, bytes32 indexed salt);
 
-    /// @dev Deploys `bytecode` via CREATE2 with `salt`.
-    function deploy(bytes memory bytecode, bytes32 salt) external returns (address addr) {
-        require(bytecode.length != 0, "BYTECODE_EMPTY");
+    function deploy(bytes32 salt, bytes memory bytecode) external returns (address addr) {
+        require(bytecode.length != 0, "code=0");
         assembly {
-            let code := add(bytecode, 0x20)
-            let size := mload(bytecode)
-            addr := create2(0, code, size, salt)
+            addr := create2(0, add(bytecode, 0x20), mload(bytecode), salt)
         }
-        require(addr != address(0), "CREATE2_FAILED");
+        require(addr != address(0), "create2 failed");
         emit Deployed(addr, salt);
-    }
-
-    /// @dev Computes the CREATE2 address this factory would use for `salt` & `initCodeHash`.
-    function compute(bytes32 salt, bytes32 initCodeHash) external view returns (address) {
-        return address(uint160(uint(keccak256(abi.encodePacked(
-            bytes1(0xff), address(this), salt, initCodeHash
-        )))));
     }
 }

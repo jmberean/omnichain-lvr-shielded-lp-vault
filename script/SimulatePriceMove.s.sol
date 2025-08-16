@@ -2,20 +2,27 @@
 pragma solidity ^0.8.26;
 
 import "forge-std/Script.sol";
-import {LVRShieldHook} from "../contracts/hooks/v4/LVRShieldHook.sol";
+import {PoolId} from "v4-core/src/types/PoolId.sol";
+
 import {IVault} from "../contracts/interfaces/IVault.sol";
+import {LVRShieldHook} from "../contracts/hooks/v4/LVRShieldHook.sol";
 
 contract SimulatePriceMove is Script {
     function run() external {
         uint256 pk = vm.envUint("PRIVATE_KEY");
         vm.startBroadcast(pk);
 
-        address hookAddr = vm.envAddress("HOOK_ADDRESS");
-        LVRShieldHook hook = LVRShieldHook(hookAddr);
+        LVRShieldHook hook = LVRShieldHook(payable(vm.envAddress("SIM_HOOK")));
+        bytes32 poolIdRaw = vm.envBytes32("SIM_POOL_ID");
 
-        // Demo emit: pick any deterministic poolId for now
-        bytes32 poolId = bytes32(uint256(0xBEEF));
-        hook.adminApplyModeForDemo(poolId, IVault.Mode.WIDENED, 42, "sim", 0, 0);
+        hook.adminApplyModeForDemo(
+            PoolId.wrap(poolIdRaw),
+            IVault.Mode.WIDENED,
+            uint64(42),
+            "sim",
+            int24(0),
+            int24(0)
+        );
 
         vm.stopBroadcast();
     }
