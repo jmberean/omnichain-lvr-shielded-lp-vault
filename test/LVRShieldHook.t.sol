@@ -20,17 +20,41 @@ contract LVRShieldHookTest is Test {
         hook = new LVRShieldHook(POOL_ID, IPriceOracle(address(oracle)), IVault(address(vault)));
     }
 
-    function testThresholdLogic() public {
+    function testThresholdLogic_UsesExplicitParam() public {
         oracle.setPrice(POOL_ID, 1000e18);
-        hook.check(100, 1); // initialize baseline
+        hook.check(100, 1);
         assertEq(uint8(vault.currentMode()), uint8(IVault.Mode.NORMAL));
 
-        oracle.setPrice(POOL_ID, 1005e18); // +0.5%
+        oracle.setPrice(POOL_ID, 1005e18);
         hook.check(100, 2);
         assertEq(uint8(vault.currentMode()), uint8(IVault.Mode.NORMAL));
 
-        oracle.setPrice(POOL_ID, 1150e18); // ~12.6% move
+        oracle.setPrice(POOL_ID, 1150e18);
         hook.check(100, 3);
         assertEq(uint8(vault.currentMode()), uint8(IVault.Mode.WIDENED));
+    }
+
+    function testThresholdLogic_UsesConfig() public {
+        oracle.setPrice(POOL_ID, 1000e18);
+        hook.check(uint64(10)); // uses default 1% threshold
+        assertEq(uint8(vault.currentMode()), uint8(IVault.Mode.NORMAL));
+
+        oracle.setPrice(POOL_ID, 1200e18);
+        hook.check(uint64(11));
+        assertEq(uint8(vault.currentMode()), uint8(IVault.Mode.WIDENED));
+    }
+
+    function testStalenessBlocksChanges() public {
+        hook.setConfig(100, 1); // 1 second staleness
+        oracle.setPrice(POOL_ID, 1000e18);
+        hook.check(uint64(20));
+        assertEq(uint8(vault.currentMode()), uint8(IVault.Mode.NORMAL));
+
+        vm.warp(block.timestamp + 100); // make price stale
+        oracle.setPrice(POOL_ID, 2000e18); // updatedAt = now (since setPrice uses block.timestamp)
+        // simulate a stale read by warping again after setPrice
+        vm.warp(block.timestamp + 400);
+        hook.check(uint64(21));
+        assertEq(uint8(vault.currentMode()), uint8(IVault.Mode.NORMAL));
     }
 }
