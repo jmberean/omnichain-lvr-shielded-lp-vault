@@ -1,0 +1,14 @@
+.DS_Store
+node_modules/
+out/
+cache/
+lib/
+broadcast/
+coverage/
+typechain-types/
+.env*
+dist/
+
+# subgraph (we'll add later)
+subgraph/generated/
+subgraph/build/
