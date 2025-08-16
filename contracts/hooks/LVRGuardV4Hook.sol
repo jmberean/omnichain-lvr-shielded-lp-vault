@@ -5,6 +5,7 @@ import {BaseHook} from "v4-periphery/hooks/BaseHook.sol";
 import {Hooks} from "v4-core/libraries/Hooks.sol";
 import {IPoolManager} from "v4-core/interfaces/IPoolManager.sol";
 import {PoolKey} from "v4-core/types/PoolKey.sol";
+import {PoolIdLibrary} from "v4-core/types/PoolId.sol";
 import {BalanceDelta} from "v4-core/types/BalanceDelta.sol";
 import {IVault} from "../interfaces/IVault.sol";
 import {IPriceOracle} from "../oracle/IPriceOracle.sol";
@@ -12,6 +13,7 @@ import {PriceMath} from "../libraries/PriceMath.sol";
 
 contract LVRGuardV4Hook is BaseHook {
     using PriceMath for uint256;
+    using PoolIdLibrary for PoolKey;
 
     IVault public immutable VAULT;
     IPriceOracle public immutable ORACLE;
@@ -75,6 +77,7 @@ contract LVRGuardV4Hook is BaseHook {
         }
 
         uint256 d = lastPriceE18.bpsDiff(p);
+        
         IVault.Mode next = d >= config.riskOffBps
             ? IVault.Mode.RISK_OFF
             : d >= config.widenBps
@@ -83,7 +86,7 @@ contract LVRGuardV4Hook is BaseHook {
 
         IVault.Mode cur = VAULT.currentMode();
         if (next != cur) {
-            VAULT.applyMode(next, uint64(block.timestamp), "");
+            VAULT.applyMode(next, uint64(block.timestamp), "Volatility trigger");
         }
         lastPriceE18 = p;
 
