@@ -1,19 +1,22 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.24;
+pragma solidity ^0.8.26;
 
-// === Uniswap v4 ===
-// BaseHook is in v4-periphery; Hooks & types are in v4-core.
+// BaseHook from periphery
 import {BaseHook} from "v4-periphery/src/utils/BaseHook.sol";
-import {Hooks} from "@uniswap/v4-core/src/libraries/Hooks.sol";
-import {IHooks} from "@uniswap/v4-core/src/interfaces/IHooks.sol";
-import {IPoolManager} from "@uniswap/v4-core/src/PoolManager.sol";
-import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
-import {BeforeSwapDelta, BeforeSwapDeltaLibrary} from "@uniswap/v4-core/src/types/BeforeSwapDelta.sol";
 
-// === Local ===
+// Core libs & types
+import {Hooks} from "v4-core/src/libraries/Hooks.sol";
+import {IHooks} from "v4-core/src/interfaces/IHooks.sol";
+import {IPoolManager} from "v4-core/src/interfaces/IPoolManager.sol";
+import {PoolKey} from "v4-core/src/types/PoolKey.sol";
+import {PoolId} from "v4-core/src/types/PoolId.sol";
+import {SwapParams} from "v4-core/src/types/PoolOperation.sol";
+import {BalanceDelta} from "v4-core/src/types/BalanceDelta.sol";
+import {BeforeSwapDelta, BeforeSwapDeltaLibrary} from "v4-core/src/types/BeforeSwapDelta.sol";
+
+// Local
 import {IVault} from "../../interfaces/IVault.sol";
 
-/// @title LVRShieldHook (minimal, compile-safe scaffold)
 contract LVRShieldHook is BaseHook {
     IVault public immutable vault;
     address public immutable admin;
@@ -32,8 +35,8 @@ contract LVRShieldHook is BaseHook {
         _;
     }
 
-    constructor(IPoolManager _poolManager, IVault _vault, address _admin)
-        BaseHook(_poolManager)
+    constructor(IPoolManager _manager, IVault _vault, address _admin)
+        BaseHook(_manager)
     {
         require(address(_vault) != address(0), "HOOK:BAD_VAULT");
         require(_admin != address(0), "HOOK:BAD_ADMIN");
@@ -43,21 +46,39 @@ contract LVRShieldHook is BaseHook {
         Hooks.validateHookPermissions(IHooks(address(this)), getHookPermissions());
     }
 
-    function getHookPermissions() public pure override returns (HookPermissions memory p) {
-        p.beforeSwap = true; // minimal safe set
+    function getHookPermissions()
+        public
+        pure
+        override
+        returns (Hooks.Permissions memory p)
+    {
+        p.beforeSwap = true;
+        p.afterSwap = true;
+        p.beforeSwapReturnDelta = false;
+        p.afterSwapReturnDelta = false;
     }
 
     function _beforeSwap(
-        address, /* sender */
-        PoolKey calldata key,
-        IPoolManager.SwapParams calldata, /* params */
-        bytes calldata /* hookData */
+        address,              // sender
+        PoolKey calldata key, // pool key
+        SwapParams calldata,  // params
+        bytes calldata        // hookData
     ) internal override returns (bytes4, BeforeSwapDelta, uint24) {
-        emit Signal(key.toId(), 0, "noop");
-        return (this.beforeSwap.selector, BeforeSwapDeltaLibrary.ZERO_DELTA, 0);
+        emit Signal(PoolId.unwrap(key.toId()), 0, "noop");
+        return (BaseHook.beforeSwap.selector, BeforeSwapDeltaLibrary.ZERO_DELTA, 0);
     }
 
-    // Admin convenience for demo
+    function _afterSwap(
+        address,             // sender
+        PoolKey calldata,    // key
+        SwapParams calldata, // params
+        BalanceDelta,        // delta
+        bytes calldata       // hookData
+    ) internal override returns (bytes4, int128) {
+        return (BaseHook.afterSwap.selector, int128(0));
+    }
+
+    // --- Admin demo helper (until full PM wiring is live) ---
     function adminApplyModeForDemo(
         bytes32 poolId,
         IVault.Mode mode_,
@@ -76,10 +97,6 @@ contract LVRShieldHook is BaseHook {
         uint24 riskOffBps,
         uint32 minFlipIntervalSec
     ) external onlyAdmin {
-        cfg[poolId] = LVRConfig({
-            widenBps: widenBps,
-            riskOffBps: riskOffBps,
-            minFlipIntervalSec: minFlipIntervalSec
-        });
+        cfg[poolId] = LVRConfig(widenBps, riskOffBps, minFlipIntervalSec);
     }
 }

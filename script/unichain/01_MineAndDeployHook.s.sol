@@ -1,14 +1,15 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.24;
+pragma solidity ^0.8.26;
 
 import "forge-std/Script.sol";
 import {IVault} from "../../contracts/interfaces/IVault.sol";
 import {LVRShieldHook} from "../../contracts/hooks/v4/LVRShieldHook.sol";
-import {IPoolManager} from "@uniswap/v4-core/src/PoolManager.sol";
+import {IPoolManager} from "v4-core/src/interfaces/IPoolManager.sol";
 // import {HookMiner} from "your/path/HookMiner.sol";
 
 contract MineAndDeployHook is Script {
-    address constant UNICHAIN_SEPOLIA_POOL_MANAGER = address(0); // <- FILL ME
+    // TODO: fill with the real Unichain Sepolia PoolManager
+    address constant UNICHAIN_SEPOLIA_POOL_MANAGER = address(0);
 
     function run() external {
         require(UNICHAIN_SEPOLIA_POOL_MANAGER != address(0), "SET_POOL_MANAGER");

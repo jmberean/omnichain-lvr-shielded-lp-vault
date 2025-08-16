@@ -1,31 +1,31 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.26;
+pragma solidity ^0.8.26;
 
-import {OApp, Origin, MessagingFee} from "lib/LayerZero-v2/packages/layerzero-v2/evm/oapp/contracts/oapp/OApp.sol";
+// LayerZero v2 OApp
+import {OApp} from "LayerZero-v2/packages/layerzero-v2/evm/oapp/contracts/oapp/OApp.sol";
+import {Origin} from "@layerzerolabs/lz-evm-protocol-v2/contracts/interfaces/ILayerZeroReceiver.sol";
+import {MessagingFee} from "@layerzerolabs/lz-evm-protocol-v2/contracts/interfaces/ILayerZeroEndpointV2.sol";
 
+/// @notice Minimal OApp wrapper (constructor forwards endpoint + owner).
 contract LVRVaultOApp is OApp {
-  address constant LZ_V2_ENDPOINT = 0x1a44076050125825900e736c501f859c50fe728c;
+    /// @param endpoint LayerZero V2 Endpoint address for this chain
+    /// @param owner    Initial owner (required by Ownable via OApp)
+    constructor(address endpoint, address owner) OApp(endpoint, owner) {}
 
-  constructor(address owner_) OApp(LZ_V2_ENDPOINT, owner_) {}
+    /// @notice Example broadcast (you’ll replace with a typed Mode payload later)
+    function broadcast(bytes32 topic, bytes calldata data, uint32 dstEid, bytes calldata options)
+        external
+        payable
+    {
+        _lzSend(dstEid, abi.encode(topic, data), options, MessagingFee(msg.value, 0), payable(msg.sender));
+    }
 
-  function sendCrossChainMessage(uint32 dstEid, bytes memory message) external payable {
-    bytes memory options = hex"0003010011010000000000000000000000000000c350"; // ~50k gas
-    _lzSend(
-      dstEid,
-      abi.encode(message),
-      options,
-      MessagingFee(msg.value, 0),
-      payable(msg.sender)
-    );
-  }
-
-  function _lzReceive(
-    Origin calldata, bytes32, bytes calldata payload, address, bytes calldata
-  ) internal override {
-    _processLVRSignal(payload);
-  }
-
-  function _processLVRSignal(bytes calldata /*payload*/) internal {
-    // TODO: decode and route to your Vault/Hook
-  }
+    /// @dev Required receive hook (no-op for now)
+    function _lzReceive(
+        Origin calldata,   // src
+        bytes32,           // guid
+        bytes calldata,    // payload
+        address,           // executor
+        bytes calldata     // extra
+    ) internal override {}
 }
