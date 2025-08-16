@@ -11,6 +11,8 @@ contract Vault is IVault {
     address private _admin;
     address private _hook;
     address private _keeper;
+    
+    mapping(bytes32 => address) private _poolHooks;
 
     modifier onlyAdmin() {
         require(msg.sender == _admin, "NOT_ADMIN");
@@ -47,12 +49,27 @@ contract Vault is IVault {
         _keeper = keeper_;
         emit KeeperChanged(keeper_);
     }
+    
+    // FIXED: Renamed parameter to avoid conflict with poolId() function
+    function registerPoolHook(bytes32 poolId_, address hookAddr) external onlyAdmin {
+        _poolHooks[poolId_] = hookAddr;
+        emit PoolHookRegistered(poolId_, hookAddr);
+    }
 
     function applyMode(Mode mode, uint64 epoch, string calldata reason) external {
-        require(msg.sender == _hook, "NOT_HOOK");
+        require(_poolHooks[_poolId] != address(0), "NO_HOOK_SET");
+        require(msg.sender == _poolHooks[_poolId], "NOT_AUTHORIZED_HOOK");
+        
         _mode = mode;
         _epoch = epoch;
         emit ModeApplied(_poolId, uint8(mode), epoch, reason);
+        
+        bool shouldReenter = _evaluateReentry(mode);
+        emit ReentryDecision(_poolId, shouldReenter, uint8(mode));
+    }
+    
+    function _evaluateReentry(Mode mode) private pure returns (bool) {
+        return mode == Mode.NORMAL;
     }
 
     function keeperRebalance(int256 baseDelta, int256 quoteDelta, string calldata reason) external {

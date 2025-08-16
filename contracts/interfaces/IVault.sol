@@ -6,10 +6,11 @@ interface IVault {
 
     event ModeApplied(bytes32 indexed poolId, uint8 mode, uint64 epoch, string reason);
     event LiquidityAction(bytes32 indexed poolId, uint8 mode, uint64 epoch, int256 baseDelta, int256 quoteDelta, string reason);
-
     event AdminChanged(address indexed admin);
     event HookChanged(address indexed hook);
     event KeeperChanged(address indexed keeper);
+    event PoolHookRegistered(bytes32 indexed poolId, address indexed hook);
+    event ReentryDecision(bytes32 indexed poolId, bool shouldReenter, uint8 mode);
 
     function poolId() external view returns (bytes32);
     function currentMode() external view returns (Mode);
@@ -22,6 +23,9 @@ interface IVault {
     function setAdmin(address admin_) external;
     function setHook(address hook_) external;
     function setKeeper(address keeper_) external;
+    
+    // FIXED: Match the parameter name change
+    function registerPoolHook(bytes32 poolId_, address hook) external;
 
     function applyMode(Mode mode, uint64 epoch, string calldata reason) external;
     function keeperRebalance(int256 baseDelta, int256 quoteDelta, string calldata reason) external;
