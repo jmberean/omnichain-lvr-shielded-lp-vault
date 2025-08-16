@@ -1,8 +1,21 @@
-type Signal @entity(immutable: true) {
+type ModeApplied @entity(immutable: true) {
   id: ID!
   poolId: Bytes!
-  priceE18: BigInt!
-  updatedAt: BigInt!
+  mode: Int!
+  epoch: BigInt!
+  reason: String!
+  blockNumber: BigInt!
+  txHash: Bytes!
+}
+
+type LiquidityAction @entity(immutable: true) {
+  id: ID!
+  poolId: Bytes!
+  mode: Int!
+  epoch: BigInt!
+  baseDelta: BigInt!
+  quoteDelta: BigInt!
+  reason: String!
   blockNumber: BigInt!
   txHash: Bytes!
 }

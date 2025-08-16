@@ -1,0 +1,26 @@
+[
+  {
+    "anonymous": false,
+    "inputs": [
+      { "indexed": true,  "internalType": "bytes32", "name": "poolId", "type": "bytes32" },
+      { "indexed": false, "internalType": "uint8",   "name": "mode",   "type": "uint8" },
+      { "indexed": false, "internalType": "uint64",  "name": "epoch",  "type": "uint64" },
+      { "indexed": false, "internalType": "string",  "name": "reason", "type": "string" }
+    ],
+    "name": "ModeApplied",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      { "indexed": true,  "internalType": "bytes32", "name": "poolId",     "type": "bytes32" },
+      { "indexed": false, "internalType": "uint8",   "name": "mode",       "type": "uint8" },
+      { "indexed": false, "internalType": "uint64",  "name": "epoch",      "type": "uint64" },
+      { "indexed": false, "internalType": "int256",  "name": "baseDelta",  "type": "int256" },
+      { "indexed": false, "internalType": "int256",  "name": "quoteDelta", "type": "int256" },
+      { "indexed": false, "internalType": "string",  "name": "reason",     "type": "string" }
+    ],
+    "name": "LiquidityAction",
+    "type": "event"
+  }
+]
