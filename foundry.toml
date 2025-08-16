@@ -1,11 +1,17 @@
 [profile.default]
 solc_version = "0.8.26"
+evm_version = "cancun"
 src = "contracts"
 out = "out"
 libs = ["lib"]
+ffi = true
 
 [fmt]
 line_length = 100
 tab_width = 4
 
-remappings = ["forge-std/=lib/forge-std/src/"]
+remappings = [
+    "forge-std/=lib/forge-std/src/",
+    "v4-core/=lib/v4-core/src/",
+    "v4-periphery/=lib/v4-periphery/src/"
+]

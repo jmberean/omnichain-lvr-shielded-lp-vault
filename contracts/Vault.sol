@@ -5,8 +5,8 @@ import {IVault} from "./interfaces/IVault.sol";
 
 contract Vault is IVault {
     bytes32 private _poolId;
-    Mode    private _mode;
-    uint64  private _epoch;
+    Mode private _mode;
+    uint64 private _epoch;
 
     address private _admin;
     address private _hook;
@@ -14,6 +14,11 @@ contract Vault is IVault {
 
     modifier onlyAdmin() {
         require(msg.sender == _admin, "NOT_ADMIN");
+        _;
+    }
+
+    modifier onlyHook() {
+        require(msg.sender == _hook, "NOT_HOOK");
         _;
     }
 
@@ -25,13 +30,29 @@ contract Vault is IVault {
         emit AdminChanged(_admin);
     }
 
-    function poolId() external view returns (bytes32) { return _poolId; }
-    function currentMode() external view returns (Mode) { return _mode; }
-    function modeEpoch() external view returns (uint64) { return _epoch; }
+    function poolId() external view returns (bytes32) {
+        return _poolId;
+    }
 
-    function admin() external view returns (address) { return _admin; }
-    function hook() external view returns (address) { return _hook; }
-    function keeper() external view returns (address) { return _keeper; }
+    function currentMode() external view returns (Mode) {
+        return _mode;
+    }
+
+    function modeEpoch() external view returns (uint64) {
+        return _epoch;
+    }
+
+    function admin() external view returns (address) {
+        return _admin;
+    }
+
+    function hook() external view returns (address) {
+        return _hook;
+    }
+
+    function keeper() external view returns (address) {
+        return _keeper;
+    }
 
     function setAdmin(address admin_) external onlyAdmin {
         _admin = admin_;
@@ -43,13 +64,14 @@ contract Vault is IVault {
         emit HookChanged(hook_);
     }
 
+
+
     function setKeeper(address keeper_) external onlyAdmin {
         _keeper = keeper_;
         emit KeeperChanged(keeper_);
     }
 
-    function applyMode(Mode mode, uint64 epoch, string calldata reason) external {
-        require(msg.sender == _hook, "NOT_HOOK");
+    function applyMode(Mode mode, uint64 epoch, string calldata reason) external onlyHook {
         _mode = mode;
         _epoch = epoch;
         emit ModeApplied(_poolId, uint8(mode), epoch, reason);
