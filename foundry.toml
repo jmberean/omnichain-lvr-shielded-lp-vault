@@ -1,19 +1,27 @@
 [profile.default]
 solc_version = "0.8.26"
-evm_version  = "cancun"
-src  = "contracts"
-out  = "out"
+evm_version = "cancun"
+src = "contracts"
+out = "out"
 libs = ["lib"]
-ffi  = true
+ffi = true
 
 [fmt]
 line_length = 100
-tab_width   = 4
+tab_width = 4
+bracket_spacing = true
 
-# Windows-safe, canonical Uniswap aliases.
+# Standardized remappings for Uniswap v4 and OpenZeppelin
 remappings = [
-  "@uniswap/v4-core/=lib/v4-core/",
-  "v4-periphery/=lib/v4-periphery/",
-  "@openzeppelin/=lib/openzeppelin-contracts/",
-  "forge-std/=lib/forge-std/src/"
+    "v4-core/=lib/v4-core/src/",
+    "v4-periphery/=lib/v4-periphery/src/",
+    "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/",
+    "forge-std/=lib/forge-std/src/",
+    "solmate/=lib/solmate/src/",
 ]
+
+[rpc_endpoints]
+sepolia = "${SEPOLIA_RPC_URL}"
+
+[etherscan]
+sepolia = { key = "${ETHERSCAN_API_KEY}" }

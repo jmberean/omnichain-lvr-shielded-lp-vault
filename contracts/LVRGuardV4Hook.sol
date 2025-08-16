@@ -1,96 +1,56 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.26;
 
-import {BaseHook} from "v4-periphery/src/utils/BaseHook.sol";
-import {Hooks} from "@uniswap/v4-core/src/libraries/Hooks.sol";
-import {IPoolManager as V4PoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
-import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
-import {PoolId, PoolIdLibrary} from "@uniswap/v4-core/src/types/PoolId.sol";
-import {BalanceDelta} from "@uniswap/v4-core/src/types/BalanceDelta.sol";
-import {StateLibrary} from "@uniswap/v4-core/src/libraries/StateLibrary.sol";
+import {IPoolManager} from "v4-core/interfaces/IPoolManager.sol";
+import {PoolKey} from "v4-core/types/PoolKey.sol";
+import {Hooks} from "v4-core/libraries/Hooks.sol";
+import {StateLibrary} from "v4-core/libraries/StateLibrary.sol";
+import {PoolId, PoolIdLibrary} from "v4-core/types/PoolId.sol";
+import {BaseHook} from "v4-periphery/BaseHook.sol";
 
-import {EwmaLib} from "./libraries/EwmaLib.sol";
-
-interface IVault {
-    function notifySignal(PoolId id, int24 tick, int24 bandLo, int24 bandHi, uint8 mode, uint64 epoch) external;
-    function notifyMode(bytes32 idRaw, uint8 newMode, uint64 epoch) external;
-    function notifyModeApplied(bytes32 idRaw, uint8 appliedMode, uint64 epoch) external;
-}
+import {ILVRGuardVault, Mode} from "./interfaces/ILVRGuardVault.sol";
 
 contract LVRGuardV4Hook is BaseHook {
     using PoolIdLibrary for PoolKey;
-    using StateLibrary for V4PoolManager;
 
-    struct Config {
-        uint64 minFlipInterval;   // seconds
-        uint32 dwellBlocks;       // blocks
-        uint32 confirmBlocks;     // blocks
-        int24  homeWidthTicks;    // +/- around current
-        int24  recentreWidthMult; // multiplier * tickSpacing
-    }
+    uint256 public constant DWELL_TIME = 12; // 1 block (12s) dwell time
+    uint256 public lastModeChangeTimestamp;
 
-    IVault public immutable vault;
+    ILVRGuardVault public immutable vault;
 
-    uint64 public immutable MIN_FLIP_INTERVAL;
-    uint32 public immutable DWELL_BLOCKS;
-    uint32 public immutable CONFIRM_BLOCKS;
-    int24  public immutable HOME_WIDTH_TICKS;
-    int24  public immutable RECENTER_WIDTH_MULT;
-
-    mapping(PoolId => uint64) public lastFlipAt;     // timestamp
-    mapping(PoolId => uint64) public lastSignalBlock; // block numbers
-
-    event SignalEmitted(bytes32 indexed poolId, int24 tick, int24 bandLo, int24 bandHi, uint8 mode, uint64 epoch);
-
-    constructor(V4PoolManager _poolManager, IVault _vault, Config memory _cfg) BaseHook(_poolManager) {
-        require(address(_vault) != address(0), "vault=0");
+    constructor(ILVRGuardVault _vault) BaseHook(IPoolManager(address(0))) {
         vault = _vault;
-
-        MIN_FLIP_INTERVAL   = _cfg.minFlipInterval;
-        DWELL_BLOCKS        = _cfg.dwellBlocks;
-        CONFIRM_BLOCKS      = _cfg.confirmBlocks;
-        HOME_WIDTH_TICKS    = _cfg.homeWidthTicks;
-        RECENTER_WIDTH_MULT = _cfg.recentreWidthMult;
     }
 
-    function getHookPermissions() public pure override returns (Hooks.Permissions memory p) {
-        p.afterSwap = true; // only afterSwap
+    function getHookPermissions() public pure override returns (Hooks.Permissions memory) {
+        return Hooks.Permissions({flags: Hooks.AFTER_SWAP_FLAG});
     }
 
     function _afterSwap(
-    address, PoolKey calldata key, V4PoolManager.SwapParams calldata, BalanceDelta, bytes calldata
+        address,
+        PoolKey calldata key,
+        IPoolManager.SwapParams calldata,
+        int128 delta
     ) internal override returns (bytes4, int128) {
-
-        PoolId id = key.toId();
-
-        // dwell / hysteresis: avoid thrashing
-        if (block.number - lastSignalBlock[id] < DWELL_BLOCKS) {
-            return (BaseHook.afterSwap.selector, 0);
+        if (block.timestamp < lastModeChangeTimestamp + DWELL_TIME) {
+            // Hysteresis: Dwell time has not passed, do nothing.
+            return (Hooks.NO_OP_SELECTOR, 0);
         }
-        lastSignalBlock[id] = uint64(block.number);
 
-        // read tick via StateLibrary
-        (, int24 tick,,) = poolManager.getSlot0(id);
+        PoolId poolId = key.toId();
+        (uint160 sqrtPriceX96,) = StateLibrary.getSlot0(poolManager, poolId);
 
-        // HOME placement: +/- width around aligned tick
-        int24 spacing = key.tickSpacing;
-        int24 width = HOME_WIDTH_TICKS != 0 ? HOME_WIDTH_TICKS : spacing * RECENTER_WIDTH_MULT;
-        int24 aligned = (tick / spacing) * spacing;
-        int24 bandLo = aligned - width;
-        int24 bandHi = aligned + width;
+        // This calculation is a simplified proxy. A real CWI would be more complex.
+        uint256 cwi = uint256(sqrtPriceX96) * uint256(sqrtPriceX96) >> 192;
 
-        uint64 epoch = uint64(block.timestamp / (MIN_FLIP_INTERVAL == 0 ? 1 : MIN_FLIP_INTERVAL));
-        emit SignalEmitted(PoolId.unwrap(id), tick, bandLo, bandHi, 0 /*HOME*/, epoch);
-        vault.notifySignal(id, tick, bandLo, bandHi, 0 /*HOME*/, epoch);
+        vault.signal(int256(delta), cwi);
 
-        return (BaseHook.afterSwap.selector, 0);
-    }
+        Mode currentMode = vault.mode();
+        if (currentMode != vault.lastAppliedMode()) {
+            lastModeChangeTimestamp = block.timestamp;
+            vault.applyMode(currentMode);
+        }
 
-    /// @notice view helper for tests/demo
-    function previewBand(int24 tick, int24 tickSpacing) external view returns (int24 lo, int24 hi) {
-        int24 width = HOME_WIDTH_TICKS != 0 ? HOME_WIDTH_TICKS : tickSpacing * RECENTER_WIDTH_MULT;
-        int24 aligned = (tick / tickSpacing) * tickSpacing;
-        lo = aligned - width;
-        hi = aligned + width;
+        return (Hooks.NO_OP_SELECTOR, 0);
     }
 }

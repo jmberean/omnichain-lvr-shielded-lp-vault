@@ -117,3 +117,25 @@ __pycache__/
 .venv/
 venv/
 ENV/
+
+# Foundry
+lib/
+out/
+cache/
+broadcast/
+deployments/
+
+# Node / JS
+node_modules/
+dist/
+coverage/
+.env
+
+# Subgraph
+generated/
+subgraph/generated/
+build/
+subgraph/build/
+
+# Backups
+*.bk
