@@ -1,45 +1,29 @@
-specVersion: 1.0.0
+specVersion: 0.0.6
 schema:
   file: ./schema.graphql
 
 dataSources:
   - kind: ethereum
-    name: LVRShieldHook
-    network: unichain-sepolia
+    name: Vault
+    network: unichain-sepolia  # change to 'mainnet' or 'anvil' as needed
     source:
-      address: "0x<your_hook_address_lowercase>"
-      abi: LVRShieldHook
-      startBlock: 1
+      # IMPORTANT: set this to your deployed Vault address, all lowercase
+      address: "0x0000000000000000000000000000000000000000"
+      abi: Vault
+      startBlock: 0
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.7
       language: wasm/assemblyscript
-      entities: [Signal, LiquidityAction]
+      entities:
+        - ModeApplied
+        - LiquidityAction
       abis:
-        - name: LVRShieldHook
-          file: ./abis/LVRShieldHook.json
+        - name: Vault
+          file: ./abis/Vault.json
       eventHandlers:
-        # add concrete hook events here if you emit any; otherwise remove
-        # - event: ModeApplied(indexed bytes32,string,uint256)
-        #   handler: handleHookModeApplied
-      file: ./src/mapping.ts
-
-  - kind: ethereum
-    name: LVRVault
-    network: unichain-sepolia
-    source:
-      address: "0x<your_vault_address_lowercase>"
-      abi: LVRVault
-      startBlock: 1
-    mapping:
-      kind: ethereum/events
-      apiVersion: 0.0.7
-      language: wasm/assemblyscript
-      entities: [ModeChange]
-      abis:
-        - name: LVRVault
-          file: ./abis/LVRVault.json
-      eventHandlers:
-        - event: ModeApplied(indexed bytes32,string,uint256)
-          handler: handleVaultModeApplied
+        - event: ModeApplied(indexed bytes32,uint8,uint64,string,int24,int24)
+          handler: handleModeApplied
+        - event: LiquidityAction(indexed bytes32,uint8,int24,int24,uint64,string)
+          handler: handleLiquidityAction
       file: ./src/mapping.ts

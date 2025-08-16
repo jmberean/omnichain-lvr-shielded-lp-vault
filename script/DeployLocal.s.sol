@@ -1,37 +1,35 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.26;
+pragma solidity ^0.8.24;
 
-import {Script} from "forge-std/Script.sol";
-import {console2 as console} from "forge-std/console2.sol";
+import "forge-std/Script.sol";
+
 import {Vault} from "../contracts/Vault.sol";
 import {IVault} from "../contracts/interfaces/IVault.sol";
-import {IPriceOracle} from "../contracts/oracle/IPriceOracle.sol";
-import {MockPriceOracle} from "../contracts/mocks/MockPriceOracle.sol";
 import {LVRShieldHook} from "../contracts/hooks/v4/LVRShieldHook.sol";
+import {IPoolManager} from "@uniswap/v4-core/src/PoolManager.sol";
 
 contract DeployLocal is Script {
-    bytes32 constant POOL_ID = bytes32("POOL");
-
     function run() external {
-        vm.startBroadcast();
+        uint256 pk = vm.envUint("PRIVATE_KEY");
+        address deployer = vm.addr(pk);
 
-        Vault vault = new Vault(POOL_ID);
-        MockPriceOracle oracle = new MockPriceOracle();
+        vm.startBroadcast(pk);
+
+        Vault vault = new Vault(deployer);
         LVRShieldHook hook = new LVRShieldHook(
-            POOL_ID,
-            IPriceOracle(address(oracle)),
-            IVault(address(vault))
+            IPoolManager(address(0)),           // dummy for local
+            IVault(address(vault)),
+            deployer
         );
 
         vault.setHook(address(hook));
 
-        oracle.setPrice(POOL_ID, 1000e18);
-        hook.check(100, 1);
-
-        console.log("Vault   :", address(vault));
-        console.log("Oracle  :", address(oracle));
-        console.log("Hook    :", address(hook));
+        bytes32 poolId = bytes32(uint256(0x1234));
+        hook.adminApplyModeForDemo(poolId, IVault.Mode.NORMAL, 1, "bootstrap", 0, 0);
 
         vm.stopBroadcast();
+
+        console2.log("Vault  :", address(vault));
+        console2.log("Hook   :", address(hook));
     }
 }

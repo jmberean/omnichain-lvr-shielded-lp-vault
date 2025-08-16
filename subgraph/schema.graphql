@@ -1,33 +1,28 @@
-type Signal @entity {
-  id: ID!
-  token: Bytes!
-  amount: BigInt!
-  price: BigDecimal!
-  timestamp: BigInt!
-  lvr: BigDecimal!
-  hookAddress: Bytes!
-}
+# Minimal schema to index ModeApplied and LiquidityAction from the Vault.
+# Expand with Signal/ModeChanged/HomeRecorded/ReentryDecision when you emit them.
 
-type ModeChange @entity {
+type ModeApplied @entity {
   id: ID!
-  pool: Bytes!
-  oldMode: String!
-  newMode: String!
-  timestamp: BigInt!
-  lvrThreshold: BigDecimal!
-  txHash: Bytes!
+  poolId: Bytes!
+  mode: Int!           # numeric enum
+  epoch: BigInt!
+  reason: String!
+  centerTick: Int!     # int24 -> GraphQL Int is fine (fits 32-bit)
+  halfWidthTicks: Int!
   blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
 }
 
 type LiquidityAction @entity {
   id: ID!
-  type: String!
-  pool: Bytes!
-  amount0: BigInt!
-  amount1: BigInt!
-  tickLower: BigInt!
-  tickUpper: BigInt!
-  lvrAdjustment: BigDecimal!
-  txHash: Bytes!
+  poolId: Bytes!
+  mode: Int!
+  epoch: BigInt!
+  action: String!
+  centerTick: Int!
+  halfWidthTicks: Int!
   blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
 }

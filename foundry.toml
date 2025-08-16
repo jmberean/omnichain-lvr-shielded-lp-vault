@@ -1,26 +1,41 @@
 [profile.default]
-solc_version = "0.8.26"
 src = "contracts"
+test = "test"
 out = "out"
 libs = ["lib"]
+solc = "0.8.26"
+evm_version = "cancun"
 optimizer = true
 optimizer_runs = 200
 
-[fmt]
-line_length = 100
-tab_width = 4
+# FIXES:
+# - Map to library ROOTS (no trailing /src) so imports like ".../src/..." resolve correctly.
+# - Point @uniswap/v4-core directly to lib/v4-core (not via periphery).
+# - solmate remap to library root to avoid "src/src" on ProtocolFees import.
 
-# Remappings
 remappings = [
+  "@ensdomains/=lib/v4-core/node_modules/@ensdomains/",
+  "@openzeppelin/=lib/v4-core/lib/openzeppelin-contracts/",
+
+  # IMPORTANT: route ALL v4-core imports to the v4-core that is pinned inside v4-periphery
+  # so BaseHook and core types (e.g., PoolOperation.sol) are in sync.
+  "@uniswap/v4-core/=lib/v4-periphery/lib/v4-core/",
+  "v4-core/=lib/v4-periphery/lib/v4-core/",
+
+  "LayerZero-v2/=lib/LayerZero-v2/",
+  "ds-test/=lib/solmate/lib/ds-test/src/",
+  "erc4626-tests/=lib/openzeppelin-contracts/lib/erc4626-tests/",
+  "forge-gas-snapshot/=lib/v4-periphery/lib/permit2/lib/forge-gas-snapshot/src/",
   "forge-std/=lib/forge-std/src/",
-  "v4-core/=lib/v4-core/src/",
-  "v4-periphery/=lib/v4-periphery/",
-  # Optional alias if you want short imports later:
-  "lz/=lib/LayerZero-v2/packages/layerzero-v2/evm/oapp/contracts/",
+  "hardhat/=lib/v4-core/node_modules/hardhat/",
   "openzeppelin-contracts/=lib/openzeppelin-contracts/",
-  # >>> ADD THIS LINE <<<
+  "permit2/=lib/v4-periphery/lib/permit2/",
+  "solmate/=lib/solmate/",
+  "v4-periphery/=lib/v4-periphery/",
+
   "@layerzerolabs/lz-evm-protocol-v2/=lib/LayerZero-v2/packages/layerzero-v2/evm/protocol/"
 ]
+
 
 [rpc_endpoints]
 unichain_sepolia = "https://sepolia.unichain.org"

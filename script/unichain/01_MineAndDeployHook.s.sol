@@ -1,38 +1,34 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.26;
-import "forge-std/Script.sol";
-import {HookMiner} from "v4-periphery/src/utils/HookMiner.sol";
-import {LVRShieldHook} from "../../contracts/hooks/v4/LVRShieldHook.sol";
-import {IPoolManager} from "v4-core/interfaces/IPoolManager.sol";
-import {HookFlags} from "../../contracts/hooks/v4/utils/HookFlags.sol";
+pragma solidity ^0.8.24;
 
-interface ICreate2Deployer {
-  function deploy(bytes memory initCode, bytes32 salt) external payable returns (address addr);
-}
+import "forge-std/Script.sol";
+import {IVault} from "../../contracts/interfaces/IVault.sol";
+import {LVRShieldHook} from "../../contracts/hooks/v4/LVRShieldHook.sol";
+import {IPoolManager} from "@uniswap/v4-core/src/PoolManager.sol";
+// import {HookMiner} from "your/path/HookMiner.sol";
 
 contract MineAndDeployHook is Script {
-  // from your spec (confirm if they change later)
-  address constant CREATE2_DEPLOYER = 0x4e59b44847b379578588920cA78FbF26c0B4956C;
-  address constant UNICHAIN_SEPOLIA_POOL_MANAGER = 0x00b036b58a818b1bc34d502d3fe730db729e62ac;
+    address constant UNICHAIN_SEPOLIA_POOL_MANAGER = address(0); // <- FILL ME
 
-  function run() external {
-    vm.startBroadcast();
+    function run() external {
+        require(UNICHAIN_SEPOLIA_POOL_MANAGER != address(0), "SET_POOL_MANAGER");
 
-    bytes memory ctorArgs = abi.encode(IPoolManager(UNICHAIN_SEPOLIA_POOL_MANAGER));
-    (address predicted, bytes32 salt) = HookMiner.find(
-      CREATE2_DEPLOYER,
-      HookFlags.FLAGS,
-      type(LVRShieldHook).creationCode,
-      ctorArgs
-    );
+        uint256 pk = vm.envUint("PRIVATE_KEY");
+        address deployer = vm.addr(pk);
 
-    bytes memory initCode = abi.encodePacked(type(LVRShieldHook).creationCode, ctorArgs);
-    address deployed = ICreate2Deployer(CREATE2_DEPLOYER).deploy(initCode, salt);
-    require(deployed == predicted, "hook address mismatch");
+        address vaultAddr = vm.envAddress("VAULT_ADDRESS");
+        require(vaultAddr != address(0), "SET_VAULT_ADDRESS");
 
-    console2.log("LVRShieldHook (predicted):", predicted);
-    console2.log("LVRShieldHook (deployed): ", deployed);
+        vm.startBroadcast(pk);
 
-    vm.stopBroadcast();
-  }
+        LVRShieldHook hook = new LVRShieldHook(
+            IPoolManager(UNICHAIN_SEPOLIA_POOL_MANAGER),
+            IVault(vaultAddr),
+            deployer
+        );
+
+        vm.stopBroadcast();
+
+        console2.log("Hook deployed:", address(hook));
+    }
 }

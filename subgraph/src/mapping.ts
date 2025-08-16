@@ -1,16 +1,35 @@
-import { BigDecimal } from "@graphprotocol/graph-ts";
-import { ModeApplied as VaultModeApplied } from "../abis/LVRVault/LVRVault";
-import { ModeChange } from "../generated/schema";
+import {
+  ModeApplied as ModeAppliedEvent,
+  LiquidityAction as LiquidityActionEvent,
+} from "../generated/Vault/Vault";
+import { ModeApplied, LiquidityAction } from "../generated/schema";
 
-export function handleVaultModeApplied(ev: VaultModeApplied): void {
-  const id = ev.transaction.hash.concatI32(ev.logIndex.toI32()).toHex();
-  const m = new ModeChange(id);
-  m.pool = ev.params.poolId; // bytes32
-  m.oldMode = "NA";
-  m.newMode = ev.params.newMode;
-  m.timestamp = ev.block.timestamp;
-  m.lvrThreshold = BigDecimal.zero();
-  m.txHash = ev.transaction.hash;
-  m.blockNumber = ev.block.number;
-  m.save();
+export function handleModeApplied(event: ModeAppliedEvent): void {
+  const id = event.transaction.hash.toHex() + "-" + event.logIndex.toString();
+  const e = new ModeApplied(id);
+  e.poolId = event.params.poolId as Bytes;
+  e.mode = event.params.mode;
+  e.epoch = event.params.epoch;
+  e.reason = event.params.reason;
+  e.centerTick = event.params.centerTick;
+  e.halfWidthTicks = event.params.halfWidthTicks;
+  e.blockNumber = event.block.number;
+  e.blockTimestamp = event.block.timestamp;
+  e.transactionHash = event.transaction.hash;
+  e.save();
+}
+
+export function handleLiquidityAction(event: LiquidityActionEvent): void {
+  const id = event.transaction.hash.toHex() + "-" + event.logIndex.toString();
+  const e = new LiquidityAction(id);
+  e.poolId = event.params.poolId as Bytes;
+  e.mode = event.params.mode;
+  e.epoch = event.params.epoch;
+  e.action = event.params.action;
+  e.centerTick = event.params.centerTick;
+  e.halfWidthTicks = event.params.halfWidthTicks;
+  e.blockNumber = event.block.number;
+  e.blockTimestamp = event.block.timestamp;
+  e.transactionHash = event.transaction.hash;
+  e.save();
 }
