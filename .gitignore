@@ -18,20 +18,32 @@ npm-debug.log*
 yarn-debug.log*
 pnpm-debug.log*
 
-# Node
+# Node / build
 node_modules/
 dist/
 build/
+.cache/
+.tmp/
+.next/
+.vercel/
 
-# Foundry
+# Foundry / Solidity
 out/
 cache/
 broadcast/
 coverage/
 gas-snapshots/
+**/*.gas-snapshot
 lib/
 
-# (future) Typechain/Hardhat artifacts (harmless if not used)
+# Artifacts from scripts/tools
+generated/
+.backups/
+tmp/
+*.coverage
+*.lcov
+
+# Typechain/Hardhat (if introduced later)
 typechain-types/
 artifacts/
 
@@ -43,8 +55,14 @@ subgraph/build/
 # Python helpers
 __pycache__/
 *.pyc
-*.py
 .pytest_cache/
 .venv/
 venv/
 ENV/
+
+# OS metadata
+ehthumbs.db
+$RECYCLE.BIN/
+
+# Do not ignore our Windows scripts or Solidity sources
+# (keep scripts/*.ps1 and contracts/** tracked)
