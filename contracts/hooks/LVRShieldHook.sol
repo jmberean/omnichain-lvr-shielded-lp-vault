@@ -15,8 +15,9 @@ contract LVRShieldHook {
     address public admin;
 
     struct Config {
-        uint256 thresholdBps;
-        uint64 staleAfter;
+        uint256 widenBps;
+        uint256 riskOffBps;
+        uint64  staleAfter;
     }
 
     Config public config;
@@ -33,14 +34,14 @@ contract LVRShieldHook {
 
     constructor(bytes32 poolId_, IPriceOracle oracle_, IVault vault_) {
         POOL_ID = poolId_;
-        ORACLE = oracle_;
-        VAULT = vault_;
-        admin = msg.sender;
-        config = Config({thresholdBps: 100, staleAfter: 300}); // 1% threshold, 5m staleness
+        ORACLE  = oracle_;
+        VAULT   = vault_;
+        admin   = msg.sender;
+        config  = Config({widenBps: 100, riskOffBps: 500, staleAfter: 300}); // 1% / 5% / 5m
     }
 
-    function setConfig(uint256 thresholdBps, uint64 staleAfter) external onlyAdmin {
-        config = Config({thresholdBps: thresholdBps, staleAfter: staleAfter});
+    function setConfig(uint256 widenBps, uint256 riskOffBps, uint64 staleAfter) external onlyAdmin {
+        config = Config({widenBps: widenBps, riskOffBps: riskOffBps, staleAfter: staleAfter});
     }
 
     function setAdmin(address newAdmin) external onlyAdmin {
@@ -52,15 +53,17 @@ contract LVRShieldHook {
         emit Signal(POOL_ID, p, t);
     }
 
+    // uses stored config
     function check(uint64 epoch) external {
-        _check(config.thresholdBps, epoch);
+        _check(config.widenBps, config.riskOffBps, epoch);
     }
 
-    function check(uint256 thresholdBps, uint64 epoch) external {
-        _check(thresholdBps, epoch);
+    // override widen threshold; riskOff from config
+    function check(uint256 widenBps, uint64 epoch) external {
+        _check(widenBps, config.riskOffBps, epoch);
     }
 
-    function _check(uint256 thresholdBps, uint64 epoch) internal {
+    function _check(uint256 widenBps, uint256 riskOffBps, uint64 epoch) internal {
         (uint256 p, uint64 t) = ORACLE.latestPriceE18(POOL_ID);
         emit Signal(POOL_ID, p, t);
 
@@ -75,8 +78,15 @@ contract LVRShieldHook {
         }
 
         uint256 d = lastPriceE18.bpsDiff(p);
-        IVault.Mode m = d >= thresholdBps ? IVault.Mode.WIDENED : IVault.Mode.NORMAL;
-        VAULT.applyMode(m, epoch, "");
+        IVault.Mode next =
+            d >= riskOffBps ? IVault.Mode.RISK_OFF :
+            d >= widenBps   ? IVault.Mode.WIDENED  :
+                              IVault.Mode.NORMAL;
+
+        IVault.Mode cur = VAULT.currentMode();
+        if (next != cur) {
+            VAULT.applyMode(next, epoch, "");
+        }
         lastPriceE18 = p;
     }
 }

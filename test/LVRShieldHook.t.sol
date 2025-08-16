@@ -20,41 +20,43 @@ contract LVRShieldHookTest is Test {
         hook = new LVRShieldHook(POOL_ID, IPriceOracle(address(oracle)), IVault(address(vault)));
     }
 
-    function testThresholdLogic_UsesExplicitParam() public {
+    function testWidenWithHighRiskOff() public {
+        // disable risk-off by setting very high threshold
+        hook.setConfig(100, 10_000, 300);
+
         oracle.setPrice(POOL_ID, 1000e18);
-        hook.check(100, 1);
+        hook.check(uint64(1)); // init
         assertEq(uint8(vault.currentMode()), uint8(IVault.Mode.NORMAL));
 
-        oracle.setPrice(POOL_ID, 1005e18);
-        hook.check(100, 2);
-        assertEq(uint8(vault.currentMode()), uint8(IVault.Mode.NORMAL));
-
-        oracle.setPrice(POOL_ID, 1150e18);
-        hook.check(100, 3);
+        oracle.setPrice(POOL_ID, 1150e18); // ~12.6% move -> wider than 1% -> WIDENED (risk-off disabled)
+        hook.check(uint64(2));
         assertEq(uint8(vault.currentMode()), uint8(IVault.Mode.WIDENED));
     }
 
-    function testThresholdLogic_UsesConfig() public {
+    function testRiskOffDefault() public {
+        // defaults: widen=1%, riskOff=5%
         oracle.setPrice(POOL_ID, 1000e18);
-        hook.check(uint64(10)); // uses default 1% threshold
+        hook.check(uint64(10)); // init
         assertEq(uint8(vault.currentMode()), uint8(IVault.Mode.NORMAL));
 
-        oracle.setPrice(POOL_ID, 1200e18);
+        oracle.setPrice(POOL_ID, 1200e18); // 20% -> risk-off
         hook.check(uint64(11));
-        assertEq(uint8(vault.currentMode()), uint8(IVault.Mode.WIDENED));
+        assertEq(uint8(vault.currentMode()), uint8(IVault.Mode.RISK_OFF));
     }
 
     function testStalenessBlocksChanges() public {
-        hook.setConfig(100, 1); // 1 second staleness
+        hook.setConfig(100, 500, 1); // 1s stale window
         oracle.setPrice(POOL_ID, 1000e18);
         hook.check(uint64(20));
         assertEq(uint8(vault.currentMode()), uint8(IVault.Mode.NORMAL));
 
-        vm.warp(block.timestamp + 100); // make price stale
-        oracle.setPrice(POOL_ID, 2000e18); // updatedAt = now (since setPrice uses block.timestamp)
-        // simulate a stale read by warping again after setPrice
+        // set fresh price
+        oracle.setPrice(POOL_ID, 2000e18);
+
+        // make it stale before calling check
         vm.warp(block.timestamp + 400);
         hook.check(uint64(21));
+        // no change because price read is stale relative to now
         assertEq(uint8(vault.currentMode()), uint8(IVault.Mode.NORMAL));
     }
 }
