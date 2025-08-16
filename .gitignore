@@ -8,7 +8,7 @@ coverage/
 typechain-types/
 .env*
 dist/
-
+*.py
 # subgraph (we'll add later)
 subgraph/generated/
 subgraph/build/
