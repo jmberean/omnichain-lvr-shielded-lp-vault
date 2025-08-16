@@ -8,16 +8,19 @@ type LiquidityAction @entity(immutable: true) {
   reason: String!
   txHash: Bytes!
   blockNumber: BigInt!
+  timestamp: BigInt!
 }
 
 type ModeApplied @entity(immutable: true) {
   id: ID!
   poolId: Bytes!
-  mode: Int!
+  oldMode: Int!
+  newMode: Int!
   epoch: BigInt!
   reason: String!
   txHash: Bytes!
   blockNumber: BigInt!
+  timestamp: BigInt!
 }
 
 type Signal @entity(immutable: true) {
@@ -25,6 +28,57 @@ type Signal @entity(immutable: true) {
   poolId: Bytes!
   priceE18: BigInt!
   updatedAt: BigInt!
+  volatilityBps: BigInt!
   txHash: Bytes!
   blockNumber: BigInt!
+  timestamp: BigInt!
+}
+
+type ConfigUpdate @entity(immutable: true) {
+  id: ID!
+  oldWidenBps: BigInt!
+  oldRiskOffBps: BigInt!
+  oldStaleAfter: BigInt!
+  newWidenBps: BigInt!
+  newRiskOffBps: BigInt!
+  newStaleAfter: BigInt!
+  txHash: Bytes!
+  blockNumber: BigInt!
+  timestamp: BigInt!
+}
+
+type ReentryConfig @entity(immutable: true) {
+  id: ID!
+  poolId: Bytes!
+  cooldownPeriod: BigInt!
+  minLiquidityThreshold: BigInt!
+  maxExposureBps: BigInt!
+  autoReentryEnabled: Boolean!
+  txHash: Bytes!
+  blockNumber: BigInt!
+  timestamp: BigInt!
+}
+
+type ReentryInitiated @entity(immutable: true) {
+  id: ID!
+  poolId: Bytes!
+  mode: Int!
+  initiatedAt: BigInt!
+  txHash: Bytes!
+  blockNumber: BigInt!
+  timestamp: BigInt!
+}
+
+# Aggregated statistics entity
+type PoolStatistics @entity {
+  id: ID! # Pool ID
+  totalSignals: BigInt!
+  totalModeChanges: BigInt!
+  totalLiquidityActions: BigInt!
+  currentMode: Int!
+  lastModeChange: BigInt!
+  avgVolatility24h: BigDecimal!
+  maxVolatility24h: BigDecimal!
+  totalVolumeBase: BigInt!
+  totalVolumeQuote: BigInt!
 }
