@@ -5,7 +5,8 @@ import {Hooks} from "v4-core/libraries/Hooks.sol";
 import {IPoolManager} from "v4-core/interfaces/IPoolManager.sol";
 import {HookMiner} from "v4-periphery/src/utils/HookMiner.sol";
 import {LVRGuardV4Hook} from "../contracts/LVRGuardV4Hook.sol";
-import {LVRVault} from "../contracts/Vault.sol";
+import {Vault as LVRVault} from "../contracts/Vault.sol";
+
 contract DeployUnichain is Script {
     function run() external {
         address pm = vm.envAddress("POOL_MANAGER");

@@ -1,16 +1,9 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.24;
+pragma solidity ^0.8.26;
+
 library EwmaLib {
-    function update(uint256 prev, uint256 sampleAbs, uint32 alphaPPM) internal pure returns (uint256) {
-        unchecked {
-            uint256 ONE = 1_000_000;
-            uint256 a = alphaPPM;
-            uint256 inv = ONE - a;
-            return (prev * inv + sampleAbs * a) / ONE;
-        }
-    }
-    function absDiff(int24 a, int24 b) internal pure returns (uint256) {
-        return a >= b ? uint256(int256(a - b)) : uint256(int256(b - a));
+    /// @notice EWMA with alpha in ppm (0..1e6). Floor division.
+    function step(uint256 prev, uint256 sample, uint32 alphaPpm) internal pure returns (uint256) {
+        unchecked { return (prev * (1_000_000 - alphaPpm) + sample * alphaPpm) / 1_000_000; }
     }
 }
-

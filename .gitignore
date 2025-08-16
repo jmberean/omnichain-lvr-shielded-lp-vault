@@ -66,3 +66,54 @@ $RECYCLE.BIN/
 
 # Do not ignore our Windows scripts or Solidity sources
 # (keep scripts/*.ps1 and contracts/** tracked)
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editors
+.vscode/
+.idea/
+*.sw?
+*.swo
+
+# Env & logs
+.env
+.env.*
+*.local
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# Node
+node_modules/
+dist/
+build/
+
+# Foundry
+out/
+cache/
+broadcast/
+coverage/
+gas-snapshots/
+lib/
+
+# Future Hardhat/Typechain
+typechain-types/
+artifacts/
+
+# Subgraph
+subgraph/generated/
+subgraph/build/
+.graphclient/
+
+# Python helpers
+__pycache__/
+*.pyc
+*.py
+.pytest_cache/
+.venv/
+venv/
+ENV/
