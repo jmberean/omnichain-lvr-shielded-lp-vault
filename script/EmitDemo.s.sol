@@ -3,7 +3,7 @@ pragma solidity 0.8.26;
 
 import {Script} from "forge-std/Script.sol";
 import {IVault} from "../contracts/interfaces/IVault.sol";
-import {LVRShieldHook} from "../contracts/hooks/LVRShieldHook.sol";
+import {LVRShieldHook} from "../contracts/hooks/v4/LVRShieldHook.sol";
 
 contract EmitDemo is Script {
     function run() external {

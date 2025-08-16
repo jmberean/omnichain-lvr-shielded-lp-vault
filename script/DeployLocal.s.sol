@@ -7,7 +7,7 @@ import {Vault} from "../contracts/Vault.sol";
 import {IVault} from "../contracts/interfaces/IVault.sol";
 import {IPriceOracle} from "../contracts/oracle/IPriceOracle.sol";
 import {MockPriceOracle} from "../contracts/mocks/MockPriceOracle.sol";
-import {LVRShieldHook} from "../contracts/hooks/LVRShieldHook.sol";
+import {LVRShieldHook} from "../contracts/hooks/v4/LVRShieldHook.sol";
 
 contract DeployLocal is Script {
     bytes32 constant POOL_ID = bytes32("POOL");

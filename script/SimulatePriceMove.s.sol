@@ -5,7 +5,7 @@ import {Script} from "forge-std/Script.sol";
 import {console2 as console} from "forge-std/console2.sol";
 import {IVault} from "../contracts/interfaces/IVault.sol";
 import {MockPriceOracle} from "../contracts/mocks/MockPriceOracle.sol";
-import {LVRShieldHook} from "../contracts/hooks/LVRShieldHook.sol";
+import {LVRShieldHook} from "../contracts/hooks/v4/LVRShieldHook.sol";
 
 contract SimulatePriceMove is Script {
     // usage:
