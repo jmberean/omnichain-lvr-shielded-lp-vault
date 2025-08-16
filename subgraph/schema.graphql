@@ -1,0 +1,8 @@
+type Signal @entity(immutable: true) {
+  id: ID!
+  poolId: Bytes!
+  priceE18: BigInt!
+  updatedAt: BigInt!
+  blockNumber: BigInt!
+  txHash: Bytes!
+}
