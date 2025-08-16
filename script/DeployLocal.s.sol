@@ -23,8 +23,10 @@ contract DeployLocal is Script {
             IVault(address(vault))
         );
 
+        vault.setHook(address(hook));
+
         oracle.setPrice(POOL_ID, 1000e18);
-        hook.check(100, 1); // 1% threshold
+        hook.check(100, 1);
 
         console.log("Vault   :", address(vault));
         console.log("Oracle  :", address(oracle));

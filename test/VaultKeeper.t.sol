@@ -9,11 +9,12 @@ contract VaultKeeperTest is Test {
     Vault vault;
     bytes32 constant POOL_ID = bytes32("POOL");
 
-    // Mirror the event to use expectEmit
     event LiquidityAction(bytes32 indexed poolId, uint8 mode, uint64 epoch, int256 baseDelta, int256 quoteDelta, string reason);
 
     function setUp() public {
         vault = new Vault(POOL_ID);
+        vault.setHook(address(this));
+        vault.setKeeper(address(this));
         vault.applyMode(IVault.Mode.WIDENED, 3, "");
     }
 

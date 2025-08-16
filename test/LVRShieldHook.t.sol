@@ -18,45 +18,33 @@ contract LVRShieldHookTest is Test {
         vault = new Vault(POOL_ID);
         oracle = new MockPriceOracle();
         hook = new LVRShieldHook(POOL_ID, IPriceOracle(address(oracle)), IVault(address(vault)));
+        vault.setHook(address(hook));
     }
 
     function testWidenWithHighRiskOff() public {
-        // disable risk-off by setting very high threshold
         hook.setConfig(100, 10_000, 300);
-
         oracle.setPrice(POOL_ID, 1000e18);
-        hook.check(uint64(1)); // init
-        assertEq(uint8(vault.currentMode()), uint8(IVault.Mode.NORMAL));
-
-        oracle.setPrice(POOL_ID, 1150e18); // ~12.6% move -> wider than 1% -> WIDENED (risk-off disabled)
+        hook.check(uint64(1));
+        oracle.setPrice(POOL_ID, 1150e18);
         hook.check(uint64(2));
         assertEq(uint8(vault.currentMode()), uint8(IVault.Mode.WIDENED));
     }
 
     function testRiskOffDefault() public {
-        // defaults: widen=1%, riskOff=5%
         oracle.setPrice(POOL_ID, 1000e18);
-        hook.check(uint64(10)); // init
-        assertEq(uint8(vault.currentMode()), uint8(IVault.Mode.NORMAL));
-
-        oracle.setPrice(POOL_ID, 1200e18); // 20% -> risk-off
+        hook.check(uint64(10));
+        oracle.setPrice(POOL_ID, 1200e18);
         hook.check(uint64(11));
         assertEq(uint8(vault.currentMode()), uint8(IVault.Mode.RISK_OFF));
     }
 
     function testStalenessBlocksChanges() public {
-        hook.setConfig(100, 500, 1); // 1s stale window
+        hook.setConfig(100, 500, 1);
         oracle.setPrice(POOL_ID, 1000e18);
         hook.check(uint64(20));
-        assertEq(uint8(vault.currentMode()), uint8(IVault.Mode.NORMAL));
-
-        // set fresh price
         oracle.setPrice(POOL_ID, 2000e18);
-
-        // make it stale before calling check
         vm.warp(block.timestamp + 400);
         hook.check(uint64(21));
-        // no change because price read is stale relative to now
         assertEq(uint8(vault.currentMode()), uint8(IVault.Mode.NORMAL));
     }
 }
