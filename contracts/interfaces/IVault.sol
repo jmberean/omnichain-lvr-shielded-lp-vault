@@ -2,13 +2,12 @@
 pragma solidity ^0.8.24;
 
 /// @title IVault for LVR-Shielded LP Vault
-/// @notice Vault receives "applyMode" calls from the Hook (onlyHook)
-///         and records keeper actions for telemetry.
+/// @notice Vault receives mode updates from the Hook and tracks liquidity positions
 interface IVault {
     enum Mode {
-        NORMAL,    // 0
-        WIDENED,   // 1
-        RISK_OFF   // 2
+        NORMAL,    // 0: Normal operations
+        WIDENED,   // 1: Widened range
+        RISK_OFF   // 2: Risk-off mode
     }
 
     event ModeApplied(
