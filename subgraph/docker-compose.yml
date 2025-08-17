@@ -30,7 +30,7 @@ services:
       postgres_pass: letmein
       postgres_db: graph
       ipfs: "ipfs:5001"
-      ethereum: "localhost:http://host.docker.internal:8545"
+      ethereum: "unichain-sepolia:${RPC_URL}"
       GRAPH_LOG: info
     extra_hosts:
       - "host.docker.internal:host-gateway"

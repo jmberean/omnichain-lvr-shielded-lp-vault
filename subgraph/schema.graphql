@@ -1,20 +1,21 @@
 # Minimal schema to index ModeApplied and LiquidityAction from the Vault.
-# Expand with Signal/ModeChanged/HomeRecorded/ReentryDecision when you emit them.
+# AdminAction is defined for future use (optional hook telemetry).
+# All entities are immutable (append-only), which the newer graph-cli expects.
 
-type ModeApplied @entity {
+type ModeApplied @entity(immutable: true) {
   id: ID!
   poolId: Bytes!
   mode: Int!           # numeric enum
   epoch: BigInt!
   reason: String!
-  centerTick: Int!     # int24 -> GraphQL Int is fine (fits 32-bit)
+  centerTick: Int!     # int24 -> GraphQL Int is fine
   halfWidthTicks: Int!
   blockNumber: BigInt!
   blockTimestamp: BigInt!
   transactionHash: Bytes!
 }
 
-type LiquidityAction @entity {
+type LiquidityAction @entity(immutable: true) {
   id: ID!
   poolId: Bytes!
   mode: Int!
@@ -22,6 +23,18 @@ type LiquidityAction @entity {
   action: String!
   centerTick: Int!
   halfWidthTicks: Int!
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
+}
+
+# Optional: only if you later add a Hook data source + handler
+type AdminAction @entity(immutable: true) {
+  id: ID!
+  poolId: Bytes!
+  mode: Int!
+  epoch: BigInt!
+  reason: String!
   blockNumber: BigInt!
   blockTimestamp: BigInt!
   transactionHash: Bytes!
