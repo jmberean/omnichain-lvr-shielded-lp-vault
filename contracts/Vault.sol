@@ -1,62 +1,103 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.26;
+pragma solidity ^0.8.24;
 
 import {IVault} from "./interfaces/IVault.sol";
 
+/// @title LVR-Shielded LP Vault (Telemetry + Apply Mode)
+/// @notice Minimal, gas-conscious vault that trusts a designated Hook for applyMode,
+///         and allows an offchain keeper to record actions for telemetry.
+/// @dev This contract is intentionally simple: no funds custody; it is a
+///      coordination/telemetry surface for the demo + subgraph.
 contract Vault is IVault {
-    bytes32 private _poolId;
-    Mode    private _mode;
-    uint64  private _epoch;
+    address public override admin;
+    address public override hook;
+    address public override keeper;
 
-    address private _admin;
-    address private _hook;
-    address private _keeper;
+    struct HomePlacement {
+        int24 centerTick;
+        int24 halfWidthTicks;
+    }
+
+    mapping(bytes32 => HomePlacement) private _home; // poolId => placement
 
     modifier onlyAdmin() {
-        require(msg.sender == _admin, "NOT_ADMIN");
+        require(msg.sender == admin, "VAULT:NOT_ADMIN");
         _;
     }
 
-    constructor(bytes32 poolId_) {
-        _poolId = poolId_;
-        _mode = Mode.NORMAL;
-        _epoch = 0;
-        _admin = msg.sender;
-        emit AdminChanged(_admin);
+    modifier onlyHook() {
+        require(msg.sender == hook, "VAULT:NOT_HOOK");
+        _;
     }
 
-    function poolId() external view returns (bytes32) { return _poolId; }
-    function currentMode() external view returns (Mode) { return _mode; }
-    function modeEpoch() external view returns (uint64) { return _epoch; }
+    modifier onlyKeeper() {
+        require(msg.sender == keeper, "VAULT:NOT_KEEPER");
+        _;
+    }
 
-    function admin() external view returns (address) { return _admin; }
-    function hook() external view returns (address) { return _hook; }
-    function keeper() external view returns (address) { return _keeper; }
+    constructor(address admin_) {
+        require(admin_ != address(0), "VAULT:BAD_ADMIN");
+        admin = admin_;
+    }
 
+    /// @notice Admin handoff.
     function setAdmin(address admin_) external onlyAdmin {
-        _admin = admin_;
-        emit AdminChanged(admin_);
+        require(admin_ != address(0), "VAULT:BAD_ADMIN");
+        admin = admin_;
     }
 
-    function setHook(address hook_) external onlyAdmin {
-        _hook = hook_;
-        emit HookChanged(hook_);
+    function setHook(address hook_) external override onlyAdmin {
+        require(hook_ != address(0), "VAULT:BAD_HOOK");
+        hook = hook_;
     }
 
-    function setKeeper(address keeper_) external onlyAdmin {
-        _keeper = keeper_;
-        emit KeeperChanged(keeper_);
+    function setKeeper(address keeper_) external override onlyAdmin {
+        require(keeper_ != address(0), "VAULT:BAD_KEEPER");
+        keeper = keeper_;
     }
 
-    function applyMode(Mode mode, uint64 epoch, string calldata reason) external {
-        require(msg.sender == _hook, "NOT_HOOK");
-        _mode = mode;
-        _epoch = epoch;
-        emit ModeApplied(_poolId, uint8(mode), epoch, reason);
+    function getHome(bytes32 poolId) external view override returns (int24 centerTick, int24 halfWidthTicks) {
+        HomePlacement memory h = _home[poolId];
+        return (h.centerTick, h.halfWidthTicks);
     }
 
-    function keeperRebalance(int256 baseDelta, int256 quoteDelta, string calldata reason) external {
-        require(msg.sender == _keeper, "NOT_KEEPER");
-        emit LiquidityAction(_poolId, uint8(_mode), _epoch, baseDelta, quoteDelta, reason);
+    /// @inheritdoc IVault
+    function applyMode(
+        bytes32 poolId,
+        Mode mode_,
+        uint64 epoch,
+        string calldata reason,
+        int24 optCenterTick,
+        int24 optHalfWidthTicks
+    ) external override onlyHook {
+        // If hints provided, record as home placement for visibility.
+        if (optCenterTick != int24(0) || optHalfWidthTicks != int24(0)) {
+            _home[poolId] = HomePlacement({centerTick: optCenterTick, halfWidthTicks: optHalfWidthTicks});
+        }
+
+        emit ModeApplied(
+            poolId,
+            uint8(mode_),
+            epoch,
+            reason,
+            optCenterTick,
+            optHalfWidthTicks
+        );
+    }
+
+    /// @inheritdoc IVault
+    function keeperRebalance(
+        bytes32 poolId,
+        int24 centerTick,
+        int24 halfWidthTicks,
+        string calldata reason,
+        uint8 mode_,
+        uint64 epoch
+    ) external override onlyKeeper {
+        // Keeper snapshot (also refresh home if provided)
+        if (centerTick != int24(0) || halfWidthTicks != int24(0)) {
+            _home[poolId] = HomePlacement({centerTick: centerTick, halfWidthTicks: halfWidthTicks});
+        }
+        emit LiquidityAction(poolId, mode_, centerTick, halfWidthTicks, epoch, reason);
     }
 }

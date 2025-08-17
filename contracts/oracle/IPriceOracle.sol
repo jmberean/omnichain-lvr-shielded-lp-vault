@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.26;
+pragma solidity ^0.8.24;
 
+/// @notice Minimal interface for a price oracle returning 1e18 fixed-point prices.
 interface IPriceOracle {
-    function latestPriceE18(bytes32 poolId) external view returns (uint256 priceE18, uint64 updatedAt);
+    /// @return priceE18 price scaled by 1e18
+    /// @return publishTime Unix timestamp of the price
+    function getPriceE18(bytes32 priceId) external view returns (uint256 priceE18, uint64 publishTime);
 }
