@@ -1,15 +1,14 @@
-specVersion: 0.0.6
+specVersion: 0.0.5
 schema:
   file: ./schema.graphql
-
 dataSources:
   - kind: ethereum
     name: Vault
     network: unichain-sepolia
     source:
-      address: "0xe215e84edcda4b3fef0533964055a4c76b9ec51d"   # <— set me, lowercase
+      address: "0x84a4871295867f587B15EAFF82e80eA2EbA79a6C"
       abi: Vault
-      startBlock: 28547230                          # <— near your first tx to sync fast
+      startBlock: 28554700
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.7
@@ -25,24 +24,30 @@ dataSources:
           handler: handleModeApplied
         - event: LiquidityAction(indexed bytes32,uint8,int24,int24,uint64,string)
           handler: handleLiquidityAction
-      file: ./src/mapping.ts
-
+      file: ./src/vault.ts
   - kind: ethereum
-    name: Hook
+    name: LVRShieldHook
     network: unichain-sepolia
     source:
-      address: "0xe215e84edcda4b3fef0533964055a4c76b9ec51d"     # <— set me, lowercase
-      abi: Hook
-      startBlock: 28547230                           # <— near your demo tx
+      address: "0x20c519Cca0360468C0eCd7A74bEc12b9895C44c0"
+      abi: LVRShieldHook
+      startBlock: 28554700
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.7
       language: wasm/assemblyscript
-      entities: [AdminAction]
+      entities:
+        - Signal
+        - ModeChanged
+        - HomeRecorded
       abis:
-        - name: Hook
-          file: ./abis/Hook.json
+        - name: LVRShieldHook
+          file: ./abis/LVRShieldHook.json
       eventHandlers:
-        - event: AdminApplyModeForDemo(indexed bytes32,uint8,uint64,string)
-          handler: handleAdminApplyModeForDemo
+        - event: Signal(indexed bytes32,int24,int24,uint24)
+          handler: handleSignal
+        - event: ModeChanged(indexed bytes32,uint8,uint8,uint64,string)
+          handler: handleModeChanged
+        - event: HomeRecorded(indexed bytes32,int24,int24)
+          handler: handleHomeRecorded
       file: ./src/hook.ts

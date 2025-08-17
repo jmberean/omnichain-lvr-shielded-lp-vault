@@ -1,39 +1,33 @@
+version: '3'
 services:
-  ipfs:
-    image: ipfs/kubo:latest
-    ports: ["5001:5001","8080:8080"]
-    command: daemon --init --migrate=true
-
-  postgres:
-    image: postgres:12-alpine
-    environment:
-      POSTGRES_PASSWORD: letmein
-      POSTGRES_DB: graph
-      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
-      LANG: C
-      LC_ALL: C
-    ports: ["5432:5432"]
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-
   graph-node:
     image: graphprotocol/graph-node:latest
-    depends_on: [ipfs, postgres]
     ports:
-      - "8000:8000" # GraphQL
-      - "8020:8020" # Admin
-      - "8030:8030" # Status
-      - "8040:8040" # Metrics
+      - '8000:8000'
+      - '8001:8001'
+      - '8020:8020'
+      - '8040:8040'
+    depends_on:
+      - ipfs
+      - postgres
     environment:
       postgres_host: postgres
-      postgres_user: postgres
-      postgres_pass: letmein
-      postgres_db: graph
-      ipfs: "ipfs:5001"
-      ethereum: "unichain-sepolia:${RPC_URL}"
-      GRAPH_LOG: info
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-
-volumes:
-  pgdata: {}
+      postgres_user: graph-node
+      postgres_pass: let-me-in
+      postgres_db: graph-node
+      ipfs: 'ipfs:5001'
+      ethereum: 'unichain-sepolia:https://sepolia.unichain.org'
+      GRAPH_LOG: debug
+  ipfs:
+    image: ipfs/go-ipfs:latest
+    ports:
+      - '5001:5001'
+  postgres:
+    image: postgres:14
+    ports:
+      - '5432:5432'
+    environment:
+      POSTGRES_USER: graph-node
+      POSTGRES_PASSWORD: let-me-in
+      POSTGRES_DB: graph-node
+      POSTGRES_INITDB_ARGS: "-E UTF8 --locale=C"

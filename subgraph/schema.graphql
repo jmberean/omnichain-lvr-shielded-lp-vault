@@ -1,14 +1,43 @@
-# Minimal schema to index ModeApplied and LiquidityAction from the Vault.
-# AdminAction is defined for future use (optional hook telemetry).
-# All entities are immutable (append-only), which the newer graph-cli expects.
-
 type ModeApplied @entity(immutable: true) {
   id: ID!
   poolId: Bytes!
-  mode: Int!           # numeric enum
+  mode: Int!
   epoch: BigInt!
   reason: String!
-  centerTick: Int!     # int24 -> GraphQL Int is fine
+  centerTick: Int!
+  halfWidthTicks: Int!
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
+}
+
+type Signal @entity(immutable: true) {
+  id: ID!
+  poolId: Bytes!
+  spotTick: Int!
+  ewmaTick: Int!
+  sigmaTicks: Int!
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
+}
+
+type ModeChanged @entity(immutable: true) {
+  id: ID!
+  poolId: Bytes!
+  oldMode: Int!
+  newMode: Int!
+  epoch: BigInt!
+  reason: String!
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
+}
+
+type HomeRecorded @entity(immutable: true) {
+  id: ID!
+  poolId: Bytes!
+  centerTick: Int!
   halfWidthTicks: Int!
   blockNumber: BigInt!
   blockTimestamp: BigInt!
@@ -19,22 +48,10 @@ type LiquidityAction @entity(immutable: true) {
   id: ID!
   poolId: Bytes!
   mode: Int!
-  epoch: BigInt!
-  action: String!
   centerTick: Int!
   halfWidthTicks: Int!
-  blockNumber: BigInt!
-  blockTimestamp: BigInt!
-  transactionHash: Bytes!
-}
-
-# Optional: only if you later add a Hook data source + handler
-type AdminAction @entity(immutable: true) {
-  id: ID!
-  poolId: Bytes!
-  mode: Int!
   epoch: BigInt!
-  reason: String!
+  action: String!
   blockNumber: BigInt!
   blockTimestamp: BigInt!
   transactionHash: Bytes!

@@ -1,23 +1,30 @@
-import { ModeApplied as ModeAppliedEvent } from "../generated/Vault/Vault";
-import { ModeApplied } from "../generated/schema";
-import { Bytes, crypto } from "@graphprotocol/graph-ts";
+import { ModeApplied as ModeAppliedEvent, LiquidityAction as LiquidityActionEvent } from "../generated/Vault/Vault"
+import { ModeApplied, LiquidityAction } from "../generated/schema"
 
-export function handleModeApplied(ev: ModeAppliedEvent): void {
-  // id = txHash-logIndex
-  const id = ev.transaction.hash.toHex() + "-" + ev.logIndex.toString();
-  const ent = new ModeApplied(id);
+export function handleModeApplied(event: ModeAppliedEvent): void {
+  let entity = new ModeApplied(event.transaction.hash.toHex() + "-" + event.logIndex.toString())
+  entity.poolId = event.params.poolId
+  entity.mode = event.params.mode
+  entity.epoch = event.params.epoch
+  entity.reason = event.params.reason
+  entity.centerTick = event.params.centerTick
+  entity.halfWidthTicks = event.params.halfWidthTicks
+  entity.blockNumber = event.block.number
+  entity.blockTimestamp = event.block.timestamp
+  entity.transactionHash = event.transaction.hash
+  entity.save()
+}
 
-  ent.poolId = ev.params.poolId as Bytes;
-  ent.mode = ev.params.mode;
-  ent.epoch = ev.params.epoch;
-  ent.reason = ev.params.reason;
-  ent.centerTick = ev.params.centerTick;
-  ent.halfWidthTicks = ev.params.halfWidthTicks;
-
-  ent.blockNumber = ev.block.number;
-  ent.timestamp = ev.block.timestamp;
-  ent.txHash = ev.transaction.hash;
-  ent.vault = ev.address;
-
-  ent.save();
+export function handleLiquidityAction(event: LiquidityActionEvent): void {
+  let entity = new LiquidityAction(event.transaction.hash.toHex() + "-" + event.logIndex.toString())
+  entity.poolId = event.params.poolId
+  entity.mode = event.params.mode
+  entity.centerTick = event.params.centerTick
+  entity.halfWidthTicks = event.params.halfWidthTicks
+  entity.epoch = event.params.epoch
+  entity.action = event.params.action
+  entity.blockNumber = event.block.number
+  entity.blockTimestamp = event.block.timestamp
+  entity.transactionHash = event.transaction.hash
+  entity.save()
 }
