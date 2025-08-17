@@ -1,35 +1,49 @@
+// subgraph/src/mapping.ts
 import {
   ModeApplied as ModeAppliedEvent,
   LiquidityAction as LiquidityActionEvent,
 } from "../generated/Vault/Vault";
-import { ModeApplied, LiquidityAction } from "../generated/schema";
+import {
+  ModeApplied as ModeAppliedEntity,
+  LiquidityAction as LiquidityActionEntity,
+} from "../generated/schema";
 
-export function handleModeApplied(event: ModeAppliedEvent): void {
-  const id = event.transaction.hash.toHex() + "-" + event.logIndex.toString();
-  const e = new ModeApplied(id);
-  e.poolId = event.params.poolId as Bytes;
-  e.mode = event.params.mode;
-  e.epoch = event.params.epoch;
-  e.reason = event.params.reason;
-  e.centerTick = event.params.centerTick;
-  e.halfWidthTicks = event.params.halfWidthTicks;
-  e.blockNumber = event.block.number;
-  e.blockTimestamp = event.block.timestamp;
-  e.transactionHash = event.transaction.hash;
-  e.save();
+function entityId(txHash: string, logIndex: string): string {
+  return txHash + "-" + logIndex;
 }
 
-export function handleLiquidityAction(event: LiquidityActionEvent): void {
-  const id = event.transaction.hash.toHex() + "-" + event.logIndex.toString();
-  const e = new LiquidityAction(id);
-  e.poolId = event.params.poolId as Bytes;
-  e.mode = event.params.mode;
-  e.epoch = event.params.epoch;
-  e.action = event.params.action;
-  e.centerTick = event.params.centerTick;
-  e.halfWidthTicks = event.params.halfWidthTicks;
-  e.blockNumber = event.block.number;
-  e.blockTimestamp = event.block.timestamp;
-  e.transactionHash = event.transaction.hash;
-  e.save();
+export function handleModeApplied(ev: ModeAppliedEvent): void {
+  const id = entityId(ev.transaction.hash.toHex(), ev.logIndex.toString());
+  const ent = new ModeAppliedEntity(id);
+
+  ent.poolId = ev.params.poolId;
+  ent.mode = ev.params.mode;
+  ent.epoch = ev.params.epoch;
+  ent.reason = ev.params.reason;
+  ent.centerTick = ev.params.centerTick;
+  ent.halfWidthTicks = ev.params.halfWidthTicks;
+
+  ent.blockNumber = ev.block.number;
+  ent.blockTimestamp = ev.block.timestamp;
+  ent.transactionHash = ev.transaction.hash;
+
+  ent.save();
+}
+
+export function handleLiquidityAction(ev: LiquidityActionEvent): void {
+  const id = entityId(ev.transaction.hash.toHex(), ev.logIndex.toString());
+  const ent = new LiquidityActionEntity(id);
+
+  ent.poolId = ev.params.poolId;
+  ent.mode = ev.params.mode;
+  ent.centerTick = ev.params.centerTick;
+  ent.halfWidthTicks = ev.params.halfWidthTicks;
+  ent.epoch = ev.params.epoch;
+  ent.action = ev.params.action;
+
+  ent.blockNumber = ev.block.number;
+  ent.blockTimestamp = ev.block.timestamp;
+  ent.transactionHash = ev.transaction.hash;
+
+  ent.save();
 }

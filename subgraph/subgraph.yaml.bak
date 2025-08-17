@@ -9,7 +9,7 @@ dataSources:
     source:
       address: "0xe215e84edcda4b3fef0533964055a4c76b9ec51d"   # <— set me, lowercase
       abi: Vault
-      startBlock: 28547230                          # <— near your first tx to sync fast
+      startBlock: 28545840                          # <— near your first tx to sync fast
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.7
@@ -33,7 +33,7 @@ dataSources:
     source:
       address: "0xe215e84edcda4b3fef0533964055a4c76b9ec51d"     # <— set me, lowercase
       abi: Hook
-      startBlock: 28547230                           # <— near your demo tx
+      startBlock: 28545920                           # <— near your demo tx
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.7

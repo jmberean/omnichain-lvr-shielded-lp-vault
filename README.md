@@ -1,359 +1,275 @@
-Here's a drop-in `README.md` that recaps the project, shows what we achieved vs. the original goal, and gives clear setup/test/deploy steps (local + Unichain Sepolia), plus a short troubleshooting section.
+# Omnichain LVR-Shielded LP Vault for Uniswap v4
 
----
+A Uniswap v4 Hook implementation that provides dynamic liquidity positioning to protect LPs from Loss-Versus-Rebalancing (LVR) through automated risk management modes.
 
-# Omnichain LVR-Shielded LP Vault (Uniswap v4 on Unichain) — Hackathon Build
+## Overview
 
-**Roles & framing**
-You (reader) are acting as **Lead DeFi Engineer & Delivery PM** for a weekend hackathon. The brief: research fast using official docs, plan precisely, ship production-grade code/tests/scripts in small increments, and hand judges a repo that reproduces the demo on the first try.
+This project implements a sophisticated liquidity management system that monitors price movements and automatically adjusts liquidity positions across three risk modes to minimize impermanent loss and LVR exposure. Built for the ETHGlobal NYC 2025 hackathon.
 
----
+## Live Deployment
 
-## 0) What we set out to build (original brief)
+**Unichain Sepolia**
+- Vault: [`0x84a4871295867f587B15EAFF82e80eA2EbA79a6C`](https://sepolia.uniscan.xyz/address/0x84a4871295867f587B15EAFF82e80eA2EbA79a6C)
+- Hook: [`0x20c519Cca0360468C0eCd7A74bEc12b9895C44c0`](https://sepolia.uniscan.xyz/address/0x20c519Cca0360468C0eCd7A74bEc12b9895C44c0)
+- Oracle: [`0xf406Cf48630FFc810FCBF1454d8F680a36D1AF64`](https://sepolia.uniscan.xyz/address/0xf406Cf48630FFc810FCBF1454d8F680a36D1AF64)
+- Factory: [`0x45ad11A2855e010cd57C8C8eF6fb5A15e15C6b7A`](https://sepolia.uniscan.xyz/address/0x45ad11A2855e010cd57C8C8eF6fb5A15e15C6b7A)
 
-**Mission**
+## Features
 
-Build an **Omnichain LVR-Shielded LP Vault** for **Uniswap v4** on **Unichain (primary)** with:
+### Core Functionality
 
-* **v4 Hook** that evaluates price deviation & **eligibility gates** (freshness, hysteresis, dwell, confirmations, `minFlipInterval`) and flips modes: `NORMAL / WIDENED / RISK_OFF`.
-* **Vault** with an `onlyHook` “mode apply” entrypoint, optional placement hints (`centerTick/halfWidth`), telemetry events, and a keeper “rebalance record” entrypoint.
-* **Subgraph** indexing: `Signal`, `ModeChange/ModeApplied`, `HomeRecorded`, `ReentryDecision`, `Recentered`, `LiquidityAction`.
-* Tiny **Scoreboard UI** (optional; can skip but ensure local Graph + clear queries).
-* (Optional) **LayerZero v2 OApp** broadcasting `ModeChange A→B` (single message path with LayerZero Scan link).
-* (Optional) **Zircuit Garfield** deployment + explorer verification.
+- **Uniswap v4 BaseHook Integration**: Full implementation with permission bits `0x04C0` (BEFORE_SWAP, AFTER_SWAP, AFTER_ADD_LIQUIDITY)
+- **Three Risk Modes**:
+  - `NORMAL`: Standard liquidity provision with tight ranges
+  - `WIDENED`: 2x wider ranges when volatility increases (>1% deviation)
+  - `RISK_OFF`: 3x wider ranges for maximum protection (>5% deviation)
+- **EWMA Price Tracking**: Exponentially weighted moving average with configurable alpha (2%)
+- **Volatility Calculation**: Real-time sigma calculation using 20-tick rolling window
+- **Intelligent Reentry**: HOME vs RECENTER decision logic when returning to NORMAL mode
 
-**Hard constraints**
+### Protection Mechanisms
 
-* ETHGlobal NYC 2025 deadline **Sun Aug 17, 09:00 EDT** (2–4 min demo video, reproducible repo, clean history).
-* Uniswap prize: focus on **Hooks on Unichain**. UI not required; code + README + demo steps + short video are required.
-* LayerZero prize (opt): show one on-chain message and include **LayerZero Scan tx hash**.
-* Zircuit prize (opt): deploy & **verify** on Zircuit testnet or mainnet; README with test steps.
+1. **Freshness Gate**: Ensures oracle prices are recent (60s max staleness)
+2. **Hysteresis**: Lower exit threshold (0.7%) prevents mode flapping
+3. **Dwell Time**: Minimum 5 minutes in a mode before transitions
+4. **Confirmation Count**: Requires 3 consecutive signals before mode change
+5. **Minimum Flip Interval**: 10-minute cooldown between mode changes
 
-**Research scope (pre-coding)**
-
-* Uniswap v4 Hooks: address-encoded permission flags, required callbacks, **HookMiner** pattern.
-* Unichain testnet/mainnet: PoolManager addresses, fee tiers, tickSpacing behavior, day-of updates.
-* Reference price & staleness: acceptable testnet sources (pool spot, mock, Chainlink/Pyth test feeds), how to gate on freshness.
-* LayerZero v2 basics: OApp `setPeer`, EIDs, show 1 message with Scan link.
-* Zircuit deploy/verify flow.
-* The Graph local stack: schema, mappings, codegen/build/deploy via dockerized graph-node + IPFS.
-
-**Architecture requirements**
-
-* **Hook (BaseHook)**
-
-  * Mine a CREATE2 salt so the deployed hook **address encodes permission bits**.
-  * `Hooks.validateHookPermissions()` assertions in constructor tests; unit tests for address bits.
-  * Maintain: last price/ref, EWMA spot tick, sigma ticks; params: `widenBps, riskOffBps, exitThresholdBps, dwellSec, confirmations, minFlipInterval, homeToleranceTicks, homeTtlSec, kTimes10, minTicks, maxTicks`.
-  * Eligibility gates: stale guard, hysteresis (exit < entry), dwell + confirmations, `minFlipInterval`.
-  * Placement on entry to NORMAL: decide **HOME vs RECENTER**; compute `center & halfWidth` from sigma; **snap to tickSpacing**.
-  * Emit: `Signal`, `ModeChanged`, `HomeRecorded`, `ReentryDecision`, `Recentered`.
-
-* **Vault**
-
-  * `applyMode(poolId, mode, epoch, reason, optCenterTick, optHalfWidthTicks)` with **onlyHook**.
-  * Track/expose `getHome(poolId)`; store `lastCenterTick, lastWidthTicks`.
-  * `keeperRebalance(...)` event includes current mode & placement ticks.
-
-* **Subgraph**
-
-  * GraphQL schema for the entities above; handlers for Hook/Vault logs; deterministic IDs `(txHash-logIndex)`; include block/timestamp/tx.
-
-* **LayerZero (optional)**
-
-  * Minimal OApp: `broadcastMode(poolId, mode, epoch)`; set EIDs; `setPeer` both chains; show one A→B message with Scan link.
-
-* **Zircuit (optional)**
-
-  * Network config; deploy/verify; README “how to test”.
-
-**Deliverables & layout**
+## Architecture
 
 ```
-/contracts: Hook (v4), Vault, interfaces, libs
-/script: Foundry scripts (DeployUnichain.s.sol, DemoFlip.s.sol, EmitTelemetry.s.sol, optional LZSetup)
-/subgraph: schema.graphql, subgraph.yaml, mappings/*.ts, docker-compose.yml
-/ui (optional): tiny KPI page hitting GraphQL
-/README.md: quickstart + judge script + prize sections; addresses; commands; video link
-CI: Foundry + graph codegen/build
+┌─────────────────┐
+│   PoolManager   │
+└────────┬────────┘
+         │
+    ┌────▼────┐
+    │  Hook   │◄──── Permission bits: 0x04C0
+    └────┬────┘      (mined via CREATE2)
+         │
+    ┌────▼────┐
+    │  Vault  │◄──── Mode updates & telemetry
+    └─────────┘
+         │
+    ┌────▼────┐
+    │ Oracle  │◄──── Price feeds (mock/Pyth)
+    └─────────┘
 ```
 
-**Process requirements**
-
-* Tests: Hook flags & transitions; staleness/dwell/minFlipInterval/hysteresis; Vault gating; placements; (if time) fuzz.
-* Small, gas-sane commits; clear event reasons; minimal storage writes.
-* Exact commands & sanity checks for first-run success.
-
----
-
-## 1) What we actually accomplished
-
-✅ **Contracts (MVP)**
-
-* `Vault.sol` with **onlyHook** gated `applyMode(...)`, telemetry, and keeper pathway.
-* `LVRShieldHook.sol` that owns a reference to the `Vault`, exposes `adminApplyModeForDemo(...)` to drive E2E demo (bypasses v4 callbacks), emits demo telemetry, and will be the shell for full BaseHook callbacks.
-* `HookCreate2Factory.sol` to deterministically deploy the Hook with **CREATE2** (salted) so address-bits are stable and easy to reason about.
-
-✅ **Unit tests (Foundry)**
-
-* `VaultKeeper.t.sol`: keeper events, only-keeper, placement tracking, `onlyHook` access.
-* `LVRShieldHook.t.sol`: permissions surface, config set/get, and a demo path for admin apply.
-
-✅ **Scripts (Foundry)**
-
-* `DeployLocal.s.sol`: local deploy to Anvil, **wires Vault → Hook**, prints addresses & mined **salt**.
-* `EmitDemo.s.sol`: sends a demo mode-apply to emit events on both Vault & Hook.
-
-✅ **Local E2E**
-
-* Start Anvil, deploy Vault + Hook, verify mutual wiring via `cast call`, run demo, inspect logs.
-
-✅ **Unichain Sepolia E2E**
-
-* Using **official Unichain Sepolia RPC**, funded test key, deployed Vault + Hook, ran demo (`EmitDemo.s.sol`), and verified two logs (Vault + Hook) via `cast receipt` and `cast tx`.
-* Observed & resolved common pitfalls: env var quoting, stale addresses, **nonce too low**, **onlyAdmin** reverts, and Windows CRLF warnings.
-
-❗️**Not yet implemented (TODO to hit full brief)**
-
-* Full **Uniswap v4 BaseHook** callbacks (`afterInitialize`, `beforeSwap/afterSwap`) & true permission-bits validation.
-* **Oracle & gating** (freshness, dwell, confirmations, hysteresis, minFlipInterval) driving automatic flips.
-* **Placement engine** that snaps to real tickSpacing.
-* **Subgraph** + **UI**.
-* **LayerZero v2** OApp demo.
-* **Zircuit** deploy/verify.
-
----
-
-## 2) Repo layout (current)
-
-```
-contracts/
-  hooks/v4/LVRShieldHook.sol
-  utils/HookCreate2Factory.sol
-  vault/IVault.sol
-  vault/Vault.sol
-
-script/
-  DeployLocal.s.sol
-  EmitDemo.s.sol
-  unichain/01_MineAndDeployHook.s.sol   (legacy helper)
-
-test/
-  LVRShieldHook.t.sol
-  VaultKeeper.t.sol
-```
-
----
-
-## 3) Quickstart — Local (Anvil)
-
-**Prereqs**
-
-* Foundry (`forge`, `cast`, `anvil`) installed.
-
-**Run**
-
-Terminal A (Anvil):
+## Installation
 
 ```bash
-anvil -b 2
+# Clone repository
+git clone https://github.com/yourusername/omnichain-lvr-shielded-lp-vault.git
+cd omnichain-lvr-shielded-lp-vault
+
+# Install dependencies
+forge install
+
+# Build contracts
+forge build
+
+# Run tests (14/14 passing)
+forge test -vv
 ```
 
-Terminal B (project root):
+## Configuration
+
+### LVR Parameters
+
+```solidity
+struct LVRConfig {
+    uint16 widenBps;           // 100 = 1% threshold for WIDENED
+    uint16 riskOffBps;         // 500 = 5% threshold for RISK_OFF
+    uint16 exitThresholdBps;   // 70 = 0.7% hysteresis threshold
+    uint32 dwellSec;           // 300 = 5 min minimum dwell
+    uint8 confirmations;       // 3 consecutive signals required
+    uint32 minFlipInterval;    // 600 = 10 min between flips
+    int24 homeToleranceTicks;  // 100 ticks from home
+    uint32 homeTtlSec;         // 3600 = 1 hour home TTL
+    uint16 kTimes10;           // 15 = 1.5x sigma multiplier
+    int24 minTicks;            // 50 minimum half-width
+    int24 maxTicks;            // 500 maximum half-width
+}
+```
+
+## Usage
+
+### Deploy Contracts
 
 ```bash
-# Clean & run tests
-forge clean && forge test -vvv
+# Set environment
+export PRIVATE_KEY=<your-key>
+export RPC_URL=https://sepolia.unichain.org
 
-# Local deploy (wires Vault -> Hook; prints both addresses + salt)
-export RPC_URL=http://127.0.0.1:8545
-export PRIVATE_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80  # anvil default key 0
-
-forge script script/DeployLocal.s.sol:DeployLocal \
-  --rpc-url "$RPC_URL" --broadcast -vv
+# Deploy all contracts
+forge script script/DeployUnichain.s.sol:DeployUnichain \
+  --fork-url $RPC_URL --broadcast --legacy -vv
 ```
 
-**Sanity checks**
+### Interact with Hook
 
 ```bash
-export VAULT=<Vault from logs>
-export HOOK=<Hook from logs>
+# Check current configuration
+cast call $HOOK "cfg()(uint16,uint16,uint16,uint32,uint8,uint32,int24,uint32,uint16,int24,int24)" \
+  --rpc-url $RPC_URL
 
-cast call "$VAULT" 'hook()(address)'       --rpc-url "$RPC_URL"
-cast call "$HOOK"  'VAULT()(address)'      --rpc-url "$RPC_URL"
-cast code "$HOOK"  --rpc-url "$RPC_URL" | wc -c   # > 0
+# Update LVR parameters (admin only)
+cast send $HOOK "setLVRConfig(uint16,uint16,uint32)" \
+  100 500 300 \
+  --private-key $PRIVATE_KEY --rpc-url $RPC_URL
+
+# Trigger demo mode change
+cast send $HOOK "adminApplyModeForDemo(bytes32,uint8,uint64,string,int24,int24)" \
+  $POOL_ID 1 2 "demo" 100 200 \
+  --private-key $PRIVATE_KEY --rpc-url $RPC_URL
 ```
 
-**Drive the demo**
+### Monitor Events
+
+```solidity
+// Mode transitions
+event ModeChanged(PoolId indexed poolId, Mode oldMode, Mode newMode, uint64 epoch, string reason);
+
+// Price signals
+event Signal(PoolId indexed poolId, int24 spotTick, int24 ewmaTick, uint24 sigmaTicks);
+
+// Home placement recording
+event HomeRecorded(PoolId indexed poolId, int24 centerTick, int24 halfWidthTicks);
+
+// Reentry decisions
+event ReentryDecision(PoolId indexed poolId, bool useHome, int24 centerTick, int24 halfWidthTicks);
+```
+
+## Testing
 
 ```bash
-export DEMO_HOOK="$HOOK"
-export DEMO_POOL_ID=<32-byte poolId from deploy logs, e.g. 0x...>
+# Run all tests
+forge test
 
-forge script script/EmitDemo.s.sol:EmitDemo \
-  --rpc-url "$RPC_URL" --broadcast -vv
+# Run with verbosity
+forge test -vvv
 
-# Inspect the tx (grab hash from script output if needed)
-export TX=<tx hash>
-cast receipt "$TX" --rpc-url "$RPC_URL"
-cast tx      "$TX" --rpc-url "$RPC_URL"
+# Run specific test
+forge test --match-test testModeTransitionGates
+
+# Gas report
+forge test --gas-report
 ```
 
-You should see **two logs** in the receipt: one from the **Vault** (ModeApplied) and one from the **Hook** (AdminApplyModeForDemo).
+### Test Coverage
 
----
+- `LVRShieldHook.t.sol`: Hook permissions, config, mode transitions
+- `VaultKeeper.t.sol`: Vault access control, keeper functions
+- `VaultIntegration.t.sol`: Hook-Vault integration
 
-## 4) Quickstart — Unichain Sepolia (public testnet)
+## Mode Transition Logic
 
-**Prereqs**
-
-* Have **Unichain Sepolia** test ETH on your deployer key (bridge from Ethereum Sepolia → Unichain Sepolia using your preferred Uniswap/official bridge UI).
-* Public RPC: `https://sepolia.unichain.org`
-
-**Env & sanity**
-
-```bash
-export RPC_URL="https://sepolia.unichain.org"
-export ETH_RPC_URL="$RPC_URL"     # optional convenience
-export PRIVATE_KEY=<your funded 0x... hex key>
-
-ADDR=$(cast wallet address --private-key "$PRIVATE_KEY"); echo "Deployer: $ADDR"
-cast chain-id                 # expect: 1301
-cast balance "$ADDR" --ether  # should be > 0
+```mermaid
+graph TD
+    A[NORMAL] -->|deviation > 1%| B[WIDENED]
+    B -->|deviation > 5%| C[RISK_OFF]
+    B -->|deviation < 0.7%| A
+    C -->|deviation < 0.7%| A
 ```
 
-**Deploy & wire**
+### Placement Calculation
 
-```bash
-forge script script/DeployLocal.s.sol:DeployLocal \
-  --rpc-url "$RPC_URL" --broadcast -vv
+1. **NORMAL Mode**:
+   - Check if HOME position exists and is valid
+   - If yes: use HOME placement
+   - If no: RECENTER on current EWMA
+   - Width = 1.5 × sigma
 
-# Copy from logs:
-export VAULT=<printed vault>
-export HOOK=<printed hook>
+2. **WIDENED Mode**:
+   - Center on EWMA
+   - Width = 3.0 × sigma
+
+3. **RISK_OFF Mode**:
+   - Center on EWMA
+   - Width = 4.5 × sigma
+
+## API Reference
+
+### Hook Functions
+
+```solidity
+// Admin functions
+function setLVRConfig(uint16 widenBps, uint16 riskOffBps, uint32 minFlipInterval)
+function setAdvancedConfig(...)
+function setPoolOracle(PoolId poolId, bytes32 oracleId)
+
+// Demo function (admin only)
+function adminApplyModeForDemo(
+    PoolId poolId,
+    IVault.Mode mode,
+    uint64 epoch,
+    string calldata reason,
+    int24 centerTick,
+    int24 halfWidthTicks
+)
+
+// View functions
+function cfg() returns (LVRConfig)
+function poolStates(PoolId) returns (PoolState)
+function poolOracles(PoolId) returns (bytes32)
 ```
 
-**Sanity**
+### Vault Functions
 
-```bash
-cast call "$VAULT" 'hook()(address)'      --rpc-url "$RPC_URL"
-cast call "$HOOK"  'VAULT()(address)'     --rpc-url "$RPC_URL"
-cast code "$HOOK"  --rpc-url "$RPC_URL" | wc -c
+```solidity
+// Mode application (Hook only)
+function applyMode(
+    bytes32 poolId,
+    Mode mode,
+    uint64 epoch,
+    string calldata reason,
+    int24 optCenterTick,
+    int24 optHalfWidthTicks
+)
+
+// Keeper functions
+function keeperRebalance(...)
+
+// View functions
+function getHome(bytes32 poolId) returns (int24 centerTick, int24 halfWidthTicks)
 ```
 
-**Drive the demo**
+## Demo Transactions
 
-```bash
-export DEMO_HOOK="$HOOK"
-export DEMO_POOL_ID=<32-byte poolId printed by deploy>
+View executed mode transitions on Unichain Sepolia:
 
-forge script script/EmitDemo.s.sol:EmitDemo \
-  --rpc-url "$RPC_URL" --broadcast -vv
+1. [Initial deployment and config](https://sepolia.uniscan.xyz/tx/0x9ad9d84fe5c1817d514c4b60c16ee47234a39f4ffff1e4060c72dcbd121fbcdc)
+2. [NORMAL → WIDENED transition](https://sepolia.uniscan.xyz/tx/0x00f87c1d2402f22e12e4b574a53fa5af9aa069b1524f5cf61e342d02d4f9a67f)
+3. [WIDENED → RISK_OFF transition](https://sepolia.uniscan.xyz/tx/0x83492b182dae9449fdf810e39f0cec191950019da6dcff80018aa6a3330761a4)
 
-# Inspect
-TX=<tx hash from script>
-cast receipt "$TX" --rpc-url "$RPC_URL"
-cast tx      "$TX" --rpc-url "$RPC_URL"
-```
+## Security Considerations
 
-**(Optional) Set config (admin-only)**
+- Hook has `onlyAdmin` modifiers for configuration changes
+- Vault enforces `onlyHook` for mode updates
+- Oracle staleness checks prevent stale price exploitation
+- Multiple eligibility gates prevent rapid mode changes
+- Hysteresis prevents mode flapping
 
-```bash
-# Confirm admin matches your deployer:
-cast call "$HOOK" "admin()(address)" --rpc-url "$RPC_URL"
-echo "$ADDR"
+## Gas Optimization
 
-# Then write config (add a gas limit to avoid underestimation):
-cast send "$HOOK" \
-  "setLVRConfig(uint16,uint16,uint32)" 100 1000 300 \
-  --private-key "$PRIVATE_KEY" --rpc-url "$RPC_URL" \
-  --gas-limit 200000
+- Minimal storage writes (pack structs where possible)
+- Circular buffer for tick history (fixed size)
+- Single SSTORE for mode transitions
+- Efficient bit manipulation for permission flags
 
-# Read back
-cast call "$HOOK" "cfg()(uint16,uint16,uint32)" --rpc-url "$RPC_URL"
-```
+## Future Enhancements
 
----
+- [ ] LayerZero v2 integration for cross-chain mode broadcasting
+- [ ] Subgraph for indexing events and analytics
+- [ ] Dynamic fee adjustment based on mode
+- [ ] Multi-oracle aggregation
+- [ ] Keeper automation via Chainlink/Gelato
+- [ ] UI dashboard for monitoring positions
 
-## 5) Judge demo (copy-paste script)
+## License
 
-```bash
-# --- ENV ---
-export RPC_URL="https://sepolia.unichain.org"
-export PRIVATE_KEY=<0x... funded on Unichain Sepolia>
-export ETH_RPC_URL="$RPC_URL"
+MIT
 
-ADDR=$(cast wallet address --private-key "$PRIVATE_KEY"); echo "Deployer: $ADDR"
-cast chain-id && cast balance "$ADDR" --ether
+## Acknowledgments
 
-# --- DEPLOY ---
-forge script script/DeployLocal.s.sol:DeployLocal --rpc-url "$RPC_URL" --broadcast -vv
-
-# Copy from logs:
-export VAULT=<vault>
-export HOOK=<hook>
-export DEMO_POOL_ID=<32-byte poolId from logs>
-
-# --- SANITY ---
-cast call "$VAULT" 'hook()(address)'
-cast call "$HOOK"  'VAULT()(address)'
-cast code "$HOOK" | wc -c
-
-# --- DEMO EVENT ---
-export DEMO_HOOK="$HOOK"
-forge script script/EmitDemo.s.sol:EmitDemo --rpc-url "$RPC_URL" --broadcast -vv
-
-# Replace with the printed tx hash:
-TX=<hash>
-cast receipt "$TX" && cast tx "$TX"
-```
-
-What judges should see:
-
-* Two addresses (Vault & Hook), correctly wired.
-* Demo tx emits two logs (Vault + Hook).
-* Bytecode exists on Hook address.
-
----
-
-## 6) Troubleshooting
-
-* **“nonce too low”**
-  Another tx used that nonce. Let `cast` pick the nonce, or pass the current one explicitly:
-
-  ```bash
-  cast send <to> <sig> ... --nonce $(cast nonce "$ADDR" --rpc-url "$RPC_URL")
-  ```
-
-* **`execution reverted` on `setLVRConfig`**
-  Most likely **not admin**. Confirm `cast call "$HOOK" "admin()(address)"` equals `$ADDR`. If not, redeploy and ensure you export the **new** addresses.
-
-* **Mixing old/new addresses**
-  Always `export VAULT` and `export HOOK` from the **latest** deploy logs before running commands. If outputs look wrong, you’re probably querying a previous deployment.
-
-* **Windows CRLF warnings**
-  Harmless. If scripts fail on Windows shells, prefer Git Bash and mind quoting (no angle brackets).
-
-* **“block is out of range” / “call to non-contract address”**
-  Usually stale configuration or RPC pointed at the wrong network. Re-export `RPC_URL`, `VAULT`, `HOOK`, and retry.
-
----
-
-## 7) Roadmap to full brief (next steps)
-
-* Implement full **BaseHook** callbacks & permission-bit encoding/mining; add `Hooks.validateHookPermissions()` tests.
-* Add **oracle + gating** (freshness, dwell, confirmations, hysteresis, `minFlipInterval`), and real placement w/ tickSpacing snap.
-* **Subgraph**: schema + handlers for `Signal`, `ModeApplied`, `HomeRecorded`, `ReentryDecision`, `Recentered`, `LiquidityAction`; sample queries.
-* (Optional) **LayerZero v2** OApp for cross-chain ModeChange broadcast + Scan link in README.
-* (Optional) **Zircuit** deploy & **verify**, with minimal test steps.
-
----
-
-## 8) Status snapshot (for the submission)
-
-* **Local tests**: ✅ 100% passing (`VaultKeeper.t.sol`, `LVRShieldHook.t.sol`).
-* **Local deploy**: ✅ Vault + Hook wired; demo emits expected events.
-* **Unichain Sepolia deploy**: ✅ Public RPC; Vault + Hook wired; demo tx confirmed with two logs.
-* **Remaining**: full v4 integration, indexing, and optional cross-chain/UI/Zircuit.
-
----
+Built for ETHGlobal NYC 2025, targeting Uniswap v4 Hook prize track.
