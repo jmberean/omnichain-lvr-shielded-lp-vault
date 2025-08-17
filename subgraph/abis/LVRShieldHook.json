@@ -3,10 +3,33 @@
     "anonymous": false,
     "inputs": [
       { "indexed": true,  "internalType": "bytes32", "name": "poolId",    "type": "bytes32" },
-      { "indexed": false, "internalType": "uint256", "name": "priceE18",  "type": "uint256" },
-      { "indexed": false, "internalType": "uint64",  "name": "updatedAt", "type": "uint64"  }
+      { "indexed": false, "internalType": "int24",   "name": "spotTick",  "type": "int24"   },
+      { "indexed": false, "internalType": "int24",   "name": "ewmaTick",  "type": "int24"   },
+      { "indexed": false, "internalType": "uint24",  "name": "sigmaTicks","type": "uint24"  }
     ],
     "name": "Signal",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      { "indexed": true,  "internalType": "bytes32", "name": "poolId",   "type": "bytes32" },
+      { "indexed": false, "internalType": "uint8",   "name": "oldMode",  "type": "uint8"   },
+      { "indexed": false, "internalType": "uint8",   "name": "newMode",  "type": "uint8"   },
+      { "indexed": false, "internalType": "uint64",  "name": "epoch",    "type": "uint64"  },
+      { "indexed": false, "internalType": "string",  "name": "reason",   "type": "string"  }
+    ],
+    "name": "ModeChanged",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      { "indexed": true,  "internalType": "bytes32", "name": "poolId",      "type": "bytes32" },
+      { "indexed": false, "internalType": "int24",   "name": "centerTick",  "type": "int24"   },
+      { "indexed": false, "internalType": "int24",   "name": "halfWidthTicks","type": "int24" }
+    ],
+    "name": "HomeRecorded",
     "type": "event"
   }
 ]

@@ -2,12 +2,12 @@
   {
     "anonymous": false,
     "inputs": [
-      { "indexed": true, "internalType": "bytes32", "name": "poolId", "type": "bytes32" },
-      { "indexed": false, "internalType": "uint8", "name": "mode", "type": "uint8" },
-      { "indexed": false, "internalType": "uint64", "name": "epoch", "type": "uint64" },
-      { "indexed": false, "internalType": "string", "name": "reason", "type": "string" },
-      { "indexed": false, "internalType": "int24", "name": "centerTick", "type": "int24" },
-      { "indexed": false, "internalType": "int24", "name": "halfWidthTicks", "type": "int24" }
+      { "indexed": true,  "internalType": "bytes32", "name": "poolId",        "type": "bytes32" },
+      { "indexed": false, "internalType": "uint8",   "name": "mode",          "type": "uint8"   },
+      { "indexed": false, "internalType": "uint64",  "name": "epoch",         "type": "uint64"  },
+      { "indexed": false, "internalType": "string",  "name": "reason",        "type": "string"  },
+      { "indexed": false, "internalType": "int24",   "name": "centerTick",    "type": "int24"   },
+      { "indexed": false, "internalType": "int24",   "name": "halfWidthTicks","type": "int24"   }
     ],
     "name": "ModeApplied",
     "type": "event"
@@ -15,12 +15,12 @@
   {
     "anonymous": false,
     "inputs": [
-      { "indexed": true, "internalType": "bytes32", "name": "poolId", "type": "bytes32" },
-      { "indexed": false, "internalType": "uint8", "name": "mode", "type": "uint8" },
-      { "indexed": false, "internalType": "int24", "name": "centerTick", "type": "int24" },
-      { "indexed": false, "internalType": "int24", "name": "halfWidthTicks", "type": "int24" },
-      { "indexed": false, "internalType": "uint64", "name": "epoch", "type": "uint64" },
-      { "indexed": false, "internalType": "string", "name": "action", "type": "string" }
+      { "indexed": true,  "internalType": "bytes32", "name": "poolId",        "type": "bytes32" },
+      { "indexed": false, "internalType": "uint8",   "name": "mode",          "type": "uint8"   },
+      { "indexed": false, "internalType": "int24",   "name": "centerTick",    "type": "int24"   },
+      { "indexed": false, "internalType": "int24",   "name": "halfWidthTicks","type": "int24"   },
+      { "indexed": false, "internalType": "uint64",  "name": "epoch",         "type": "uint64"  },
+      { "indexed": false, "internalType": "string",  "name": "action",        "type": "string"  }
     ],
     "name": "LiquidityAction",
     "type": "event"
