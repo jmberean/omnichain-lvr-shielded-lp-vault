@@ -1,275 +1,278 @@
-# Omnichain LVR-Shielded LP Vault for Uniswap v4
+# LVR-Shielded LP Vault for Uniswap v4
 
-A Uniswap v4 Hook implementation that provides dynamic liquidity positioning to protect LPs from Loss-Versus-Rebalancing (LVR) through automated risk management modes.
+A Uniswap v4 Hook + Vault that dynamically adjusts LP ranges to reduce Loss-Versus-Rebalancing (LVR) via automated risk modes and guardrails. Built for ETHGlobal NYC 2025.
+
+## Table of Contents
+
+* [Overview](#overview)
+* [Live Deployment (Unichain Sepolia)](#live-deployment-unichain-sepolia)
+* [How It Works](#how-it-works)
+* [Repo Layout](#repo-layout)
+* [Prerequisites](#prerequisites)
+* [Quickstart (Local Graph + Demo)](#quickstart-local-graph--demo)
+* [Environment](#environment)
+* [Local Subgraph Stack](#local-subgraph-stack)
+* [Demo Script: What It Does](#demo-script-what-it-does)
+* [GraphQL Queries](#graphql-queries)
+* [Events & Entity Schema](#events--entity-schema)
+* [Signals vs Modes (How They Correlate)](#signals-vs-modes-how-they-correlate)
+* [Contracts & Admin](#contracts--admin)
+* [Testing & Gas](#testing--gas)
+* [Troubleshooting](#troubleshooting)
+* [Roadmap](#roadmap)
+* [License](#license)
 
 ## Overview
 
-This project implements a sophisticated liquidity management system that monitors price movements and automatically adjusts liquidity positions across three risk modes to minimize impermanent loss and LVR exposure. Built for the ETHGlobal NYC 2025 hackathon.
+The LVR-Shielded Vault monitors price and volatility, then switches **modes** that widen or tighten Uniswap v4 LP ranges:
 
-## Live Deployment
+* `NORMAL`: tight range (baseline)
+* `WIDENED`: \~2× wider when volatility or deviation rises
+* `RISK_OFF`: \~3×+ wider for maximum capital protection
 
-**Unichain Sepolia**
-- Vault: [`0x84a4871295867f587B15EAFF82e80eA2EbA79a6C`](https://sepolia.uniscan.xyz/address/0x84a4871295867f587B15EAFF82e80eA2EbA79a6C)
-- Hook: [`0x20c519Cca0360468C0eCd7A74bEc12b9895C44c0`](https://sepolia.uniscan.xyz/address/0x20c519Cca0360468C0eCd7A74bEc12b9895C44c0)
-- Oracle: [`0xf406Cf48630FFc810FCBF1454d8F680a36D1AF64`](https://sepolia.uniscan.xyz/address/0xf406Cf48630FFc810FCBF1454d8F680a36D1AF64)
-- Factory: [`0x45ad11A2855e010cd57C8C8eF6fb5A15e15C6b7A`](https://sepolia.uniscan.xyz/address/0x45ad11A2855e010cd57C8C8eF6fb5A15e15C6b7A)
+A companion **subgraph** indexes Hook+Vault events for analytics and demos. The included `demo-e2e.sh` shows an end-to-end flow: start Graph node + IPFS, deploy the subgraph, send three on-chain demo txs (`RISK_OFF → WIDENED → NORMAL`), wait for indexing, and then query the exact results.
 
-## Features
+## Live Deployment (Unichain Sepolia)
 
-### Core Functionality
+* **Vault:** `0x84a4871295867f587B15EAFF82e80eA2EbA79a6C`
+* **Hook:**  `0x20c519Cca0360468C0eCd7A74bEc12b9895C44c0`
+* **Oracle (mock or Pyth-wired in future):** `0xf406Cf48630FFc810FCBF1454d8F680a36D1AF64`
+* **Factory:** `0x45ad11A2855e010cd57C8C8eF6fb5A15e15C6b7A`
 
-- **Uniswap v4 BaseHook Integration**: Full implementation with permission bits `0x04C0` (BEFORE_SWAP, AFTER_SWAP, AFTER_ADD_LIQUIDITY)
-- **Three Risk Modes**:
-  - `NORMAL`: Standard liquidity provision with tight ranges
-  - `WIDENED`: 2x wider ranges when volatility increases (>1% deviation)
-  - `RISK_OFF`: 3x wider ranges for maximum protection (>5% deviation)
-- **EWMA Price Tracking**: Exponentially weighted moving average with configurable alpha (2%)
-- **Volatility Calculation**: Real-time sigma calculation using 20-tick rolling window
-- **Intelligent Reentry**: HOME vs RECENTER decision logic when returning to NORMAL mode
+> Chain: **Unichain Sepolia** RPC you provide via `RPC_URL`.
 
-### Protection Mechanisms
+## How It Works
 
-1. **Freshness Gate**: Ensures oracle prices are recent (60s max staleness)
-2. **Hysteresis**: Lower exit threshold (0.7%) prevents mode flapping
-3. **Dwell Time**: Minimum 5 minutes in a mode before transitions
-4. **Confirmation Count**: Requires 3 consecutive signals before mode change
-5. **Minimum Flip Interval**: 10-minute cooldown between mode changes
+* **Hook (Uniswap v4 BaseHook):** inspects price/volatility and proposes range changes.
+* **Vault:** executes the placement and emits `ModeApplied` + telemetry events.
+* **Signals:** the Hook also emits `Signal(spotTick, ewmaTick, sigmaTicks)` each “epoch” the demo sends, which the Vault uses (plus gates like dwell-time, hysteresis, confirmation count) to decide mode transitions.
 
-## Architecture
+## Repo Layout
 
 ```
-┌─────────────────┐
-│   PoolManager   │
-└────────┬────────┘
-         │
-    ┌────▼────┐
-    │  Hook   │◄──── Permission bits: 0x04C0
-    └────┬────┘      (mined via CREATE2)
-         │
-    ┌────▼────┐
-    │  Vault  │◄──── Mode updates & telemetry
-    └─────────┘
-         │
-    ┌────▼────┐
-    │ Oracle  │◄──── Price feeds (mock/Pyth)
-    └─────────┘
+.
+├── contracts/               # Hook, Vault, supporting libs
+├── script/                  # Deployment scripts
+├── subgraph/                # The Graph manifest, mappings, docker-compose
+├── demo-e2e.sh              # End-to-end local demo (Git Bash friendly)
+└── .env.example             # Template for env vars
 ```
 
-## Installation
+## Prerequisites
+
+* Docker (with Compose)
+* Foundry: `forge`, `cast`
+* Node.js + npm (`npx`, `npm`)
+* `curl` (CLI)
+* **Optional:** `jq` (pretty-prints the 8030 status if present)
+
+## Quickstart (Local Graph + Demo)
 
 ```bash
-# Clone repository
+# 1) Clone and enter
 git clone https://github.com/yourusername/omnichain-lvr-shielded-lp-vault.git
 cd omnichain-lvr-shielded-lp-vault
 
-# Install dependencies
-forge install
+# 2) Create your env
+cp .env.example .env
+# Fill in RPC_URL, PRIVATE_KEY, HOOK, VAULT, POOL_ID (bytes32), etc.
 
-# Build contracts
-forge build
-
-# Run tests (14/14 passing)
-forge test -vv
+# 3) Run the demo (starts Graph+IPFS, deploys subgraph, sends 3 txs)
+./demo-e2e.sh
 ```
 
-## Configuration
+What you’ll see:
 
-### LVR Parameters
+* Docker stack spin-up (IPFS, Postgres, Graph Node)
+* Subgraph compile & deploy to the local node
+* 3 on-chain demo transactions with receipts
+* A wait loop until the subgraph `_meta.block.number` >= **max** demo block
+* A GraphQL result set with exactly those 3 events (both `ModeApplied` and `Signal`)
 
-```solidity
-struct LVRConfig {
-    uint16 widenBps;           // 100 = 1% threshold for WIDENED
-    uint16 riskOffBps;         // 500 = 5% threshold for RISK_OFF
-    uint16 exitThresholdBps;   // 70 = 0.7% hysteresis threshold
-    uint32 dwellSec;           // 300 = 5 min minimum dwell
-    uint8 confirmations;       // 3 consecutive signals required
-    uint32 minFlipInterval;    // 600 = 10 min between flips
-    int24 homeToleranceTicks;  // 100 ticks from home
-    uint32 homeTtlSec;         // 3600 = 1 hour home TTL
-    uint16 kTimes10;           // 15 = 1.5x sigma multiplier
-    int24 minTicks;            // 50 minimum half-width
-    int24 maxTicks;            // 500 maximum half-width
+## Environment
+
+Set in `.env` (or export in your shell):
+
+```
+# chain + signer
+RPC_URL=...
+PRIVATE_KEY=0x...
+
+# deployed contracts (Unichain Sepolia)
+VAULT=0x84a4871295867f587B15EAFF82e80eA2EbA79a6C
+HOOK=0x20c519Cca0360468C0eCd7A74bEc12b9895C44c0
+POOL_ID=0x000000000000000000000000000000000000000000000000000000000000457f
+
+# local graph
+GRAPH_HTTP_URL=http://127.0.0.1:8000
+GRAPH_NODE_URL=http://127.0.0.1:8020
+IPFS_URL=http://127.0.0.1:5001
+SUBGRAPH_NAME=lvr-shield
+VERSION_LABEL=v0.0.1
+```
+
+> The subgraph manifest (`subgraph/subgraph.yaml`) pins `startBlock` around the first deploy (e.g., `28554700`) and the contract addresses above so indexing starts at the right height.
+
+## Local Subgraph Stack
+
+`subgraph/docker-compose.yml` exposes:
+
+* **8000** – GraphQL query endpoint
+* **8020** – Graph Node admin (JSON-RPC)
+* **8030** – Indexing status GraphQL (enabled via `- "8030:8030"`)
+* **5001** – IPFS API
+
+Endpoints (local):
+
+* Query: `http://127.0.0.1:8000/subgraphs/name/lvr-shield`
+* GraphiQL: `http://127.0.0.1:8000/subgraphs/name/lvr-shield/graphql`
+* Indexing status: `http://127.0.0.1:8030/graphql`
+
+## Demo Script: What It Does
+
+`./demo-e2e.sh` (Windows Git Bash friendly):
+
+1. **Start** the Graph/IPFS docker stack and wait for admin JSON-RPC (8020).
+2. **Build & deploy** the subgraph (`npx graph deploy …`).
+3. **Send three demo txs** calling:
+
+   ```
+   adminApplyModeForDemo(
+     poolId, mode, epoch,
+     reason, centerTick, halfWidthTicks
+   )
+   ```
+
+   The script chooses epochs based on the current time, sets reasons (`risk-off-demo`, `widen-demo`, `normal-demo`), and emits:
+
+   * `Signal` from the **Hook** (address = `HOOK`)
+   * `ModeApplied` from the **Vault** (address = `VAULT`)
+4. **Verify on-chain** logs (last \~450–500 blocks).
+5. **Wait for indexing**: polls `_meta.block.number` until it reaches the highest demo block.
+6. **Print exact GraphQL** that selects the 3 demo transactions (by `transactionHash_in`) and a compact “last 3” query.
+
+If `jq` is installed, the script will also pretty-print `indexingStatuses` from `:8030`.
+
+## GraphQL Queries
+
+### Last 3 mode changes + signals (by block desc)
+
+```graphql
+{
+  modeApplieds(
+    where:{poolId:"0x…457f"},
+    first:3, orderBy:blockNumber, orderDirection:desc
+  ) {
+    id mode epoch centerTick halfWidthTicks blockNumber transactionHash
+  }
+  signals(
+    where:{poolId:"0x…457f"},
+    first:3, orderBy:blockNumber, orderDirection:desc
+  ) {
+    id spotTick ewmaTick sigmaTicks blockNumber transactionHash
+  }
 }
 ```
 
-## Usage
+### Exact demo transactions (script prints this too)
 
-### Deploy Contracts
-
-```bash
-# Set environment
-export PRIVATE_KEY=<your-key>
-export RPC_URL=https://sepolia.unichain.org
-
-# Deploy all contracts
-forge script script/DeployUnichain.s.sol:DeployUnichain \
-  --fork-url $RPC_URL --broadcast --legacy -vv
+```graphql
+{
+  modeApplieds(
+    where:{
+      poolId:"0x…457f",
+      transactionHash_in:["0xTX1","0xTX2","0xTX3"]
+    },
+    first:3, orderBy:blockNumber, orderDirection:asc
+  ) {
+    id mode epoch centerTick halfWidthTicks blockNumber transactionHash
+  }
+  signals(
+    where:{
+      poolId:"0x…457f",
+      transactionHash_in:["0xTX1","0xTX2","0xTX3"]
+    },
+    first:3, orderBy:blockNumber, orderDirection:asc
+  ) {
+    id spotTick ewmaTick sigmaTicks blockNumber transactionHash
+  }
+}
 ```
 
-### Interact with Hook
+## Events & Entity Schema
+
+### Emitted On Each Demo Tx
+
+* **Hook → `Signal`**
+
+  * `spotTick`: current tick snapshot
+  * `ewmaTick`: exponentially-weighted moving average tick
+  * `sigmaTicks`: volatility proxy (in ticks)
+* **Vault → `ModeApplied`**
+
+  * `mode`: `0=NORMAL`, `1=WIDENED`, `2=RISK_OFF`
+  * `epoch`, `centerTick`, `halfWidthTicks`
+  * `reason` stored in the event data (mapped into the subgraph)
+
+> In the subgraph, both entities carry the same `transactionHash` so you can correlate the pair for a given epoch/tx.
+
+### Example Entity Fields
+
+* `ModeApplied`: `id`, `poolId`, `mode`, `epoch`, `centerTick`, `halfWidthTicks`, `blockNumber`, `transactionHash`
+* `Signal`: `id`, `poolId`, `spotTick`, `ewmaTick`, `sigmaTicks`, `blockNumber`, `transactionHash`
+
+## Signals vs Modes (How They Correlate)
+
+* A **Signal** records telemetry for that epoch (spot/ewma/sigma). Consecutive signals can share identical values (e.g., `{50,50,100}`) if price doesn’t move.
+* The **mode** is chosen by rules (thresholds, hysteresis, dwell times, confirmations). That means identical signal tuples can still correspond to *different* modes depending on **state and recent history**.
+* In the demo, `adminApplyModeForDemo` explicitly applies a mode per tx so you’ll always get one `Signal` + one `ModeApplied`. Correlate via `transactionHash` rather than assuming one-to-one mapping from `{spot,ewma,sigma}` to a specific mode.
+
+## Contracts & Admin
+
+Some handy calls with `cast`:
 
 ```bash
-# Check current configuration
-cast call $HOOK "cfg()(uint16,uint16,uint16,uint32,uint8,uint32,int24,uint32,uint16,int24,int24)" \
-  --rpc-url $RPC_URL
+# Read Hook config
+cast call $HOOK "cfg()(uint16,uint16,uint16,uint32,uint8,uint32,int24,uint32,uint16,int24,int24)" --rpc-url $RPC_URL
 
-# Update LVR parameters (admin only)
-cast send $HOOK "setLVRConfig(uint16,uint16,uint32)" \
-  100 500 300 \
-  --private-key $PRIVATE_KEY --rpc-url $RPC_URL
-
-# Trigger demo mode change
-cast send $HOOK "adminApplyModeForDemo(bytes32,uint8,uint64,string,int24,int24)" \
-  $POOL_ID 1 2 "demo" 100 200 \
-  --private-key $PRIVATE_KEY --rpc-url $RPC_URL
+# Demo mode application (used by the script)
+cast send $HOOK \
+  "adminApplyModeForDemo(bytes32,uint8,uint64,string,int24,int24)" \
+  $POOL_ID 2 $EPOCH "risk-off-demo" 0 500 \
+  --private-key $PRIVATE_KEY --rpc-url $RPC_URL --legacy
 ```
 
-### Monitor Events
-
-```solidity
-// Mode transitions
-event ModeChanged(PoolId indexed poolId, Mode oldMode, Mode newMode, uint64 epoch, string reason);
-
-// Price signals
-event Signal(PoolId indexed poolId, int24 spotTick, int24 ewmaTick, uint24 sigmaTicks);
-
-// Home placement recording
-event HomeRecorded(PoolId indexed poolId, int24 centerTick, int24 halfWidthTicks);
-
-// Reentry decisions
-event ReentryDecision(PoolId indexed poolId, bool useHome, int24 centerTick, int24 halfWidthTicks);
-```
-
-## Testing
+## Testing & Gas
 
 ```bash
-# Run all tests
-forge test
-
-# Run with verbosity
+forge build
 forge test -vvv
-
-# Run specific test
-forge test --match-test testModeTransitionGates
-
-# Gas report
 forge test --gas-report
 ```
 
-### Test Coverage
+* Tests cover Hook permissions/config, mode transitions, and Vault integration.
 
-- `LVRShieldHook.t.sol`: Hook permissions, config, mode transitions
-- `VaultKeeper.t.sol`: Vault access control, keeper functions
-- `VaultIntegration.t.sol`: Hook-Vault integration
+## Troubleshooting
 
-## Mode Transition Logic
+* **“Empty reply from server” while waiting for 8020**
+  Normal during Graph Node startup; the script retries until admin JSON-RPC is ready.
+* **Graph query returns nothing right after sending tx**
+  The script **waits** until `_meta.block.number` ≥ your highest demo block. If you run custom txs, make sure your `startBlock` and addresses in `subgraph.yaml` align with where your contracts live.
+* **Indexing status empty**
+  Ensure docker maps `- "8030:8030"` and you’re querying `http://127.0.0.1:8030/graphql`.
+* **Different counts in results**
+  If one of the three demo txs fails on-chain, the script will print successful vs failed txs and the query will naturally include only the successes.
 
-```mermaid
-graph TD
-    A[NORMAL] -->|deviation > 1%| B[WIDENED]
-    B -->|deviation > 5%| C[RISK_OFF]
-    B -->|deviation < 0.7%| A
-    C -->|deviation < 0.7%| A
-```
+## Roadmap
 
-### Placement Calculation
-
-1. **NORMAL Mode**:
-   - Check if HOME position exists and is valid
-   - If yes: use HOME placement
-   - If no: RECENTER on current EWMA
-   - Width = 1.5 × sigma
-
-2. **WIDENED Mode**:
-   - Center on EWMA
-   - Width = 3.0 × sigma
-
-3. **RISK_OFF Mode**:
-   - Center on EWMA
-   - Width = 4.5 × sigma
-
-## API Reference
-
-### Hook Functions
-
-```solidity
-// Admin functions
-function setLVRConfig(uint16 widenBps, uint16 riskOffBps, uint32 minFlipInterval)
-function setAdvancedConfig(...)
-function setPoolOracle(PoolId poolId, bytes32 oracleId)
-
-// Demo function (admin only)
-function adminApplyModeForDemo(
-    PoolId poolId,
-    IVault.Mode mode,
-    uint64 epoch,
-    string calldata reason,
-    int24 centerTick,
-    int24 halfWidthTicks
-)
-
-// View functions
-function cfg() returns (LVRConfig)
-function poolStates(PoolId) returns (PoolState)
-function poolOracles(PoolId) returns (bytes32)
-```
-
-### Vault Functions
-
-```solidity
-// Mode application (Hook only)
-function applyMode(
-    bytes32 poolId,
-    Mode mode,
-    uint64 epoch,
-    string calldata reason,
-    int24 optCenterTick,
-    int24 optHalfWidthTicks
-)
-
-// Keeper functions
-function keeperRebalance(...)
-
-// View functions
-function getHome(bytes32 poolId) returns (int24 centerTick, int24 halfWidthTicks)
-```
-
-## Demo Transactions
-
-View executed mode transitions on Unichain Sepolia:
-
-1. [Initial deployment and config](https://sepolia.uniscan.xyz/tx/0x9ad9d84fe5c1817d514c4b60c16ee47234a39f4ffff1e4060c72dcbd121fbcdc)
-2. [NORMAL → WIDENED transition](https://sepolia.uniscan.xyz/tx/0x00f87c1d2402f22e12e4b574a53fa5af9aa069b1524f5cf61e342d02d4f9a67f)
-3. [WIDENED → RISK_OFF transition](https://sepolia.uniscan.xyz/tx/0x83492b182dae9449fdf810e39f0cec191950019da6dcff80018aa6a3330761a4)
-
-## Security Considerations
-
-- Hook has `onlyAdmin` modifiers for configuration changes
-- Vault enforces `onlyHook` for mode updates
-- Oracle staleness checks prevent stale price exploitation
-- Multiple eligibility gates prevent rapid mode changes
-- Hysteresis prevents mode flapping
-
-## Gas Optimization
-
-- Minimal storage writes (pack structs where possible)
-- Circular buffer for tick history (fixed size)
-- Single SSTORE for mode transitions
-- Efficient bit manipulation for permission flags
-
-## Future Enhancements
-
-- [ ] LayerZero v2 integration for cross-chain mode broadcasting
-- [ ] Subgraph for indexing events and analytics
-- [ ] Dynamic fee adjustment based on mode
-- [ ] Multi-oracle aggregation
-- [ ] Keeper automation via Chainlink/Gelato
-- [ ] UI dashboard for monitoring positions
+* Cross-chain broadcasting (LayerZero v2)
+* Dynamic fee params by mode
+* Multi-oracle aggregation
+* Keeper automation (Chainlink/Gelato)
+* UI dashboard (positions + telemetry)
 
 ## License
 
 MIT
 
-## Acknowledgments
-
-Built for ETHGlobal NYC 2025, targeting Uniswap v4 Hook prize track.
+---

@@ -1,33 +1,57 @@
-version: '3'
 services:
-  graph-node:
-    image: graphprotocol/graph-node:latest
-    ports:
-      - '8000:8000'
-      - '8001:8001'
-      - '8020:8020'
-      - '8040:8040'
-    depends_on:
-      - ipfs
-      - postgres
-    environment:
-      postgres_host: postgres
-      postgres_user: graph-node
-      postgres_pass: let-me-in
-      postgres_db: graph-node
-      ipfs: 'ipfs:5001'
-      ethereum: 'unichain-sepolia:https://sepolia.unichain.org'
-      GRAPH_LOG: debug
-  ipfs:
-    image: ipfs/go-ipfs:latest
-    ports:
-      - '5001:5001'
   postgres:
     image: postgres:14
-    ports:
-      - '5432:5432'
     environment:
       POSTGRES_USER: graph-node
       POSTGRES_PASSWORD: let-me-in
       POSTGRES_DB: graph-node
-      POSTGRES_INITDB_ARGS: "-E UTF8 --locale=C"
+      POSTGRES_INITDB_ARGS: "-E UTF8 --locale=C"  # <— important
+      PGUSER: graph-node
+      PGPASSWORD: let-me-in
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U graph-node -d graph-node"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+
+  ipfs:
+    image: ipfs/kubo:release
+    environment:
+      IPFS_PROFILE: server
+    ports:
+      - "5001:5001"
+    healthcheck:
+      test: ["CMD", "ipfs", "--api", "/ip4/127.0.0.1/tcp/5001", "version"]
+      interval: 5s
+      timeout: 4s
+      retries: 25
+    restart: unless-stopped
+
+  graph-node:
+    image: graphprotocol/graph-node:latest
+    depends_on:
+      postgres:
+        condition: service_healthy
+      ipfs:
+        condition: service_healthy
+    ports:
+      - "8000:8000"  # GraphQL
+      - "8001:8001"  # Status
+      - "8020:8020"  # Admin
+      - "8030:8030"  # status / indexing API
+      - "8040:8040"  # Metrics
+    environment:
+      # Use per-field vars (the image builds the URL internally)
+      postgres_host: postgres
+      postgres_user: graph-node
+      postgres_pass: let-me-in
+      postgres_db: graph-node
+
+      ipfs: http://ipfs:5001
+      ethereum: unichain-sepolia:https://sepolia.unichain.org
+      GRAPH_LOG: info
+    restart: unless-stopped
